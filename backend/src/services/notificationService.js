@@ -3,6 +3,13 @@ const { sendMail } = require("../lib/mailer");
 const { renderEmail } = require("./emailService");
 
 const MAX_RETRIES = 5;
+const BACKOFF_BASE_MS = 60_000; // 1 min, 2 min, 4 min, 8 min, 16 min
+
+function isEligibleForRetry(notification) {
+  if (notification.status === "PENDING") return true; // never attempted — no backoff to apply
+  const backoffMs = BACKOFF_BASE_MS * 2 ** notification.retryCount;
+  return Date.now() - notification.updatedAt.getTime() >= backoffMs;
+}
 
 // `client` is either the top-level `prisma` client or a `tx` inside an
 // active transaction — callers that need the notification row to commit
@@ -49,18 +56,27 @@ async function deliverNotification(notificationId) {
 // case) and periodically by the Step 9 cron job (the reliable fallback for
 // anything that failed or whose opportunistic attempt never ran).
 async function deliverPendingNotifications() {
-  const deliverable = await prisma.notificationLog.findMany({
+  const candidates = await prisma.notificationLog.findMany({
     where: {
       channel: "EMAIL",
       status: { in: ["PENDING", "FAILED"] },
       retryCount: { lt: MAX_RETRIES },
     },
     orderBy: { createdAt: "asc" },
-    take: 50,
+    take: 100, // fetch a wider batch since backoff filters some out below
   });
 
+  const deliverable = candidates.filter(isEligibleForRetry).slice(0, 50);
+
   for (const notification of deliverable) {
-    await deliverNotification(notification.id);
+    // Isolate each notification: one row failing in a way deliverNotification's
+    // own try/catch can't absorb (e.g. the row got deleted mid-flight) must not
+    // abort delivery for the rest of this batch.
+    try {
+      await deliverNotification(notification.id);
+    } catch (error) {
+      console.error(`Failed to process notification ${notification.id}:`, error);
+    }
   }
 
   return deliverable.length;

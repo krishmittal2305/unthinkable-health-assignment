@@ -131,6 +131,7 @@ model Appointment {
   slotStart DateTime
   slotEnd   DateTime
   status    AppointmentStatus @default(BOOKED)
+  reminderSentAt DateTime? // set once the Step 9 cron dispatches the pre-visit reminder, so it's never sent twice
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

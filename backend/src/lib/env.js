@@ -19,6 +19,15 @@ const env = {
   },
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  // Deliberately NOT `required()` — an unconfigured LLM must degrade to the
+  // fallback summary, never crash the app. llmService treats a missing
+  // endpoint/apiKey/deployment as "skip the call, go straight to fallback."
+  azureOpenAI: {
+    endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+    apiKey: process.env.AZURE_OPENAI_API_KEY,
+    deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-08-01-preview",
+  },
 };
 
 module.exports = { env };

@@ -4,6 +4,7 @@ const { prisma } = require("../lib/prisma");
 const availabilityService = require("./availabilityService");
 const doctorService = require("./doctorService");
 const notificationService = require("./notificationService");
+const llmService = require("./llmService");
 
 const SLOT_HOLD_TTL_MS = 5 * 60 * 1000;
 
@@ -141,6 +142,28 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
   }
 
   notificationService.triggerBestEffortDelivery();
+
+  // Deliberately outside the DB transaction above — an LLM call can take
+  // several seconds and must never hold a transaction (and its row locks)
+  // open. llmService never throws (Step 10's fallback contract), but the
+  // DB write afterward still gets its own guard so a save failure can't
+  // turn an already-successful booking into a 500.
+  try {
+    const summary = await llmService.generatePreVisitSummary(appointment.symptomForm.symptoms);
+    appointment.preVisitSummary = await prisma.preVisitSummary.create({
+      data: {
+        appointmentId: appointment.id,
+        urgencyLevel: summary.urgencyLevel,
+        chiefComplaint: summary.chiefComplaint,
+        suggestedQuestions: summary.suggestedQuestions,
+        rawLlmResponse: summary.rawResponse,
+        isFallback: summary.isFallback,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to save pre-visit summary (booking still succeeded):", error);
+  }
+
   return appointment;
 }
 
@@ -164,6 +187,39 @@ async function listMyAppointments(patientId) {
     },
     orderBy: { slotStart: "desc" },
   });
+}
+
+async function listForDoctor(doctorUserId) {
+  return prisma.appointment.findMany({
+    where: { doctorUserId },
+    include: {
+      patient: { select: { id: true, name: true, email: true, phone: true } },
+      symptomForm: true,
+      preVisitSummary: true,
+      postVisitNote: true,
+      postVisitSummary: true,
+    },
+    orderBy: { slotStart: "desc" },
+  });
+}
+
+async function getForDoctor(doctorUserId, appointmentId) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: {
+      patient: { select: { id: true, name: true, email: true, phone: true } },
+      symptomForm: true,
+      preVisitSummary: true,
+      postVisitNote: { include: { prescriptions: true } },
+      postVisitSummary: true,
+    },
+  });
+
+  if (!appointment || appointment.doctorUserId !== doctorUserId) {
+    throw new AppError(404, "Appointment not found");
+  }
+
+  return appointment;
 }
 
 async function cancelAppointment(patientId, appointmentId) {
@@ -215,4 +271,12 @@ async function cancelAppointment(patientId, appointmentId) {
   return updated;
 }
 
-module.exports = { createHold, confirmBooking, listMyAppointments, cancelAppointment, SLOT_HOLD_TTL_MS };
+module.exports = {
+  createHold,
+  confirmBooking,
+  listMyAppointments,
+  listForDoctor,
+  getForDoctor,
+  cancelAppointment,
+  SLOT_HOLD_TTL_MS,
+};
