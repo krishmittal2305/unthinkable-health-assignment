@@ -1,6 +1,7 @@
 const { AppError } = require("../lib/errors");
 const { prisma } = require("../lib/prisma");
 const notificationService = require("./notificationService");
+const calendarService = require("./calendarService");
 
 // Marks a doctor on leave for a date and resolves every conflict that
 // creates in one transaction:
@@ -12,6 +13,8 @@ const notificationService = require("./notificationService");
 //    transaction commits (Step 9's cron is the reliable fallback for
 //    anything that attempt misses).
 async function markDoctorOnLeave(doctorId, { date, reason }) {
+  let affectedAppointmentIds = [];
+
   const result = await prisma.$transaction(async (tx) => {
     const doctor = await tx.doctorProfile.findUnique({
       where: { id: doctorId },
@@ -40,10 +43,11 @@ async function markDoctorOnLeave(doctorId, { date, reason }) {
       where: { doctorId, slotStart: { gte: date, lt: dayEnd }, status: "BOOKED" },
       include: { patient: { select: { name: true } } },
     });
+    affectedAppointmentIds = affectedAppointments.map((appointment) => appointment.id);
 
     if (affectedAppointments.length > 0) {
       await tx.appointment.updateMany({
-        where: { id: { in: affectedAppointments.map((appointment) => appointment.id) } },
+        where: { id: { in: affectedAppointmentIds } },
         data: { status: "CANCELLED_BY_LEAVE" },
       });
 
@@ -70,6 +74,10 @@ async function markDoctorOnLeave(doctorId, { date, reason }) {
   });
 
   notificationService.triggerBestEffortDelivery();
+  for (const appointmentId of affectedAppointmentIds) {
+    calendarService.deleteEventForAppointment(appointmentId).catch(() => {});
+  }
+
   return result;
 }
 

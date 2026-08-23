@@ -5,6 +5,7 @@ const availabilityService = require("./availabilityService");
 const doctorService = require("./doctorService");
 const notificationService = require("./notificationService");
 const llmService = require("./llmService");
+const calendarService = require("./calendarService");
 
 const SLOT_HOLD_TTL_MS = 5 * 60 * 1000;
 
@@ -143,6 +144,11 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
 
   notificationService.triggerBestEffortDelivery();
 
+  // Fire-and-forget: calendar sync is a nice-to-have follow-up, not
+  // something the patient is waiting on in the confirm response, and
+  // createEventForAppointment already never throws (Step 13's contract).
+  calendarService.createEventForAppointment(appointment).catch(() => {});
+
   // Deliberately outside the DB transaction above — an LLM call can take
   // several seconds and must never hold a transaction (and its row locks)
   // open. llmService never throws (Step 10's fallback contract), but the
@@ -268,6 +274,7 @@ async function cancelAppointment(patientId, appointmentId) {
   });
 
   notificationService.triggerBestEffortDelivery();
+  calendarService.deleteEventForAppointment(appointmentId).catch(() => {});
   return updated;
 }
 

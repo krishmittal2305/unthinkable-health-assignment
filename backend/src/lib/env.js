@@ -28,6 +28,14 @@ const env = {
     deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
     apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-08-01-preview",
   },
+  // Same "degrade, don't crash" contract as azureOpenAI — an unconnected or
+  // misconfigured Google Calendar means calendar sync is skipped and logged;
+  // booking/cancelling must always succeed regardless.
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI,
+  },
 };
 
 module.exports = { env };

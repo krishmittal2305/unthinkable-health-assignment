@@ -6,6 +6,7 @@ const { adminDoctorRouter } = require("./routes/doctorRoutes");
 const { publicDoctorRouter } = require("./routes/publicDoctorRoutes");
 const { appointmentRouter } = require("./routes/appointmentRoutes");
 const { doctorAppointmentRouter } = require("./routes/doctorAppointmentRoutes");
+const { calendarRouter } = require("./routes/calendarRoutes");
 
 function createApp() {
   const app = express();
@@ -22,6 +23,7 @@ function createApp() {
   app.use("/api/doctors", publicDoctorRouter);
   app.use("/api/appointments", appointmentRouter);
   app.use("/api/doctor/appointments", doctorAppointmentRouter);
+  app.use("/api/doctor/calendar", calendarRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
