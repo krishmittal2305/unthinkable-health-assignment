@@ -14,6 +14,9 @@ export default function DoctorLayout() {
           <NavLink to="/doctor" end className={navClass}>
             Schedule
           </NavLink>
+          <NavLink to="/doctor/calendar" className={navClass}>
+            Calendar
+          </NavLink>
         </nav>
         <div>
           <span className="muted">{user?.email}</span>

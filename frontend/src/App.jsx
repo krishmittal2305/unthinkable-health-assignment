@@ -13,6 +13,7 @@ import BookAppointmentPage from "./pages/patient/BookAppointmentPage";
 import MyAppointmentsPage from "./pages/patient/MyAppointmentsPage";
 import DoctorSchedulePage from "./pages/doctor/DoctorSchedulePage";
 import DoctorAppointmentDetailPage from "./pages/doctor/DoctorAppointmentDetailPage";
+import DoctorCalendarPage from "./pages/doctor/DoctorCalendarPage";
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
       >
         <Route index element={<DoctorSchedulePage />} />
         <Route path="appointments/:appointmentId" element={<DoctorAppointmentDetailPage />} />
+        <Route path="calendar" element={<DoctorCalendarPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
