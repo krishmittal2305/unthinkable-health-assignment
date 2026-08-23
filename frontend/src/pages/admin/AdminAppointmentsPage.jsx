@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { EmptyState, ErrorState, LoadingState, Pill } from "../../components/ui";
+import { usePolling } from "../../hooks/usePolling";
 
 const STATUS_LABELS = {
   BOOKED: "Booked",
@@ -9,6 +11,15 @@ const STATUS_LABELS = {
   CANCELLED_BY_DOCTOR: "Cancelled by doctor",
   CANCELLED_BY_LEAVE: "Cancelled (leave)",
   NO_SHOW: "No-show",
+};
+
+const STATUS_TONE = {
+  BOOKED: "blue",
+  COMPLETED: "green",
+  CANCELLED_BY_PATIENT: "orange",
+  CANCELLED_BY_DOCTOR: "orange",
+  CANCELLED_BY_LEAVE: "red",
+  NO_SHOW: "pink",
 };
 
 function formatSlotTime(iso) {
@@ -28,12 +39,24 @@ export default function AdminAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    apiFetch("/api/admin/appointments", { token })
-      .then((data) => setAppointments(data.appointments))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await apiFetch("/api/admin/appointments", { token });
+      setAppointments(data.appointments);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    setLoading(true);
+    load();
+  }, [load]);
+
+  usePolling(load, 25000);
 
   const visible = statusFilter === "ALL" ? appointments : appointments.filter((a) => a.status === statusFilter);
 
@@ -53,8 +76,8 @@ export default function AdminAppointmentsPage() {
         </select>
       </label>
 
-      {loading && <p>Loading...</p>}
-      {error && <p className="form-error">{error}</p>}
+      {loading && <LoadingState />}
+      {error && <ErrorState message={error} />}
 
       <table className="table">
         <thead>
@@ -69,8 +92,8 @@ export default function AdminAppointmentsPage() {
         <tbody>
           {!loading && visible.length === 0 && (
             <tr>
-              <td colSpan={5} className="muted">
-                No appointments found.
+              <td colSpan={5}>
+                <EmptyState label="No appointments found." />
               </td>
             </tr>
           )}
@@ -80,7 +103,11 @@ export default function AdminAppointmentsPage() {
               <td>{appointment.doctorProfile.user.name}</td>
               <td>{appointment.doctorProfile.specialisation}</td>
               <td>{formatSlotTime(appointment.slotStart)}</td>
-              <td>{STATUS_LABELS[appointment.status] ?? appointment.status}</td>
+              <td>
+                <Pill tone={STATUS_TONE[appointment.status] ?? "blue"}>
+                  {STATUS_LABELS[appointment.status] ?? appointment.status}
+                </Pill>
+              </td>
             </tr>
           ))}
         </tbody>
