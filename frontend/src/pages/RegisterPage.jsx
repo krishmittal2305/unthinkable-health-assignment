@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Button, ErrorState } from "../components/ui";
+import { Button, ErrorState, Field } from "../components/ui";
+import AuthLayout from "../components/AuthLayout";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -25,44 +26,55 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="page page-narrow">
-      <h1>Create your account</h1>
+    <AuthLayout>
+      <span className="kicker">Patient sign up</span>
+      <h2>Create your account</h2>
+      <p className="muted" style={{ marginBottom: "var(--space-4)" }}>
+        Book appointments and track visits, symptom forms, and prescriptions.
+      </p>
+      <hr className="hr" />
       <form onSubmit={handleSubmit} className="form">
-        <label>
-          Name
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        </label>
-        <label>
-          Email
+        <Field label="Name">
           <input
+            className="input"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+          />
+        </Field>
+        <Field label="Email">
+          <input
+            className="input"
             type="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             required
           />
-        </label>
-        <label>
-          Password
+        </Field>
+        <Field label="Password">
           <input
+            className="input"
             type="password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             minLength={8}
             required
           />
-        </label>
-        <label>
-          Phone (optional)
-          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        </label>
+        </Field>
+        <Field label="Phone (optional)">
+          <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        </Field>
         {error && <ErrorState message={error} />}
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" disabled={submitting} block>
           {submitting ? "Creating account..." : "Create account"}
         </Button>
       </form>
-      <p className="muted" style={{ marginTop: "12px" }}>
+      <p className="muted" style={{ marginTop: "var(--space-4)" }}>
         Already have an account? <Link to="/login">Log in</Link>
       </p>
-    </div>
+      <p className="muted" style={{ fontSize: "12px", marginTop: "var(--space-2)" }}>
+        Doctor and admin accounts are created by an admin, not self-registered.
+      </p>
+    </AuthLayout>
   );
 }

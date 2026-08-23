@@ -1,21 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
-import { AiStatusBanner, Button, Card, ErrorState, LoadingState, Pill } from "../../components/ui";
+import { Button, Card, ErrorState, Field, LoadingState, Tag } from "../../components/ui";
+import { STATUS_LABELS, STATUS_TAG_VARIANT } from "../../lib/statusTags";
 
 const EMPTY_PRESCRIPTION = { drugName: "", dosage: "", frequency: "", durationDays: "" };
-
-const STATUS_TONE = {
-  BOOKED: "blue",
-  COMPLETED: "green",
-  CANCELLED_BY_PATIENT: "orange",
-  CANCELLED_BY_DOCTOR: "orange",
-  CANCELLED_BY_LEAVE: "red",
-  NO_SHOW: "pink",
-};
-
-const URGENCY_TONE = { LOW: "green", MEDIUM: "yellow", HIGH: "red" };
 
 function formatSlotTime(iso) {
   return new Date(iso).toLocaleString(undefined, {
@@ -27,9 +17,14 @@ function formatSlotTime(iso) {
   });
 }
 
+function formatGeneratedAt(iso) {
+  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 export default function DoctorAppointmentDetailPage() {
   const { appointmentId } = useParams();
   const { token } = useAuth();
+  const navigate = useNavigate();
 
   const [appointment, setAppointment] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -136,175 +131,285 @@ export default function DoctorAppointmentDetailPage() {
   if (error) return <ErrorState message={error} />;
   if (!appointment) return null;
 
+  const preVisit = appointment.preVisitSummary;
+
   return (
     <div>
-      <h1>Appointment with {appointment.patient.name}</h1>
-      <p className="muted">
-        {formatSlotTime(appointment.slotStart)} · <Pill tone={STATUS_TONE[appointment.status] ?? "blue"}>{appointment.status}</Pill>
-      </p>
-      <p className="muted" style={{ marginTop: "6px" }}>
-        {appointment.patient.email}
-        {appointment.patient.phone ? ` · ${appointment.patient.phone}` : ""}
-      </p>
-
-      {appointment.symptomForm && (
-        <Card>
-          <h2>Symptoms reported by patient</h2>
-          <p>{appointment.symptomForm.symptoms}</p>
-          {appointment.symptomForm.durationDays != null && (
-            <p className="muted">Duration: {appointment.symptomForm.durationDays} day(s)</p>
-          )}
-          {appointment.symptomForm.severity && <p className="muted">Severity: {appointment.symptomForm.severity}</p>}
-        </Card>
-      )}
-
-      {appointment.preVisitSummary && (
-        <Card>
-          <h2>AI pre-visit summary</h2>
-          {appointment.preVisitSummary.isFallback && (
-            <AiStatusBanner
-              action={
-                <Button variant="outline" onClick={handleRegeneratePreVisit} disabled={regeneratingPreVisit}>
-                  {regeneratingPreVisit ? "Regenerating..." : "Regenerate"}
-                </Button>
-              }
-            />
-          )}
-          {preVisitRegenerateError && <ErrorState message={preVisitRegenerateError} />}
-          <p style={{ margin: "8px 0" }}>
-            <Pill tone={URGENCY_TONE[appointment.preVisitSummary.urgencyLevel] ?? "blue"}>
-              {appointment.preVisitSummary.urgencyLevel}
-            </Pill>
+      <Button variant="ghost" onClick={() => navigate("/doctor")}>
+        ← Schedule
+      </Button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <h1 style={{ fontSize: "38px", marginBottom: "var(--space-1)" }}>{appointment.patient.name}</h1>
+          <p className="muted">
+            {formatSlotTime(appointment.slotStart)} · {appointment.patient.email}
+            {appointment.patient.phone ? ` · ${appointment.patient.phone}` : ""}
           </p>
-          <p>
-            <strong>Chief complaint:</strong> {appointment.preVisitSummary.chiefComplaint}
-          </p>
-          {appointment.preVisitSummary.suggestedQuestions?.length > 0 && (
+        </div>
+        <Tag variant={STATUS_TAG_VARIANT[appointment.status] ?? "neutral"}>
+          {STATUS_LABELS[appointment.status] ?? appointment.status}
+        </Tag>
+      </div>
+      <hr className="hr" />
+
+      <div className="split">
+        <div className="split-left">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="kicker">AI pre-visit summary</span>
+            {preVisit && <Tag variant="outline">{formatGeneratedAt(preVisit.createdAt)}</Tag>}
+          </div>
+
+          {preVisit ? (
             <>
-              <p style={{ marginTop: "8px" }}>
-                <strong>Suggested questions:</strong>
+              <div
+                style={{
+                  background: "var(--color-accent)",
+                  color: "var(--color-bg)",
+                  padding: "var(--space-3) var(--space-4)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-end",
+                  marginBottom: "var(--space-4)",
+                }}
+              >
+                <div>
+                  <span style={{ display: "block", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Urgency
+                  </span>
+                  <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: "30px" }}>
+                    {preVisit.urgencyLevel}
+                  </span>
+                </div>
+                <span style={{ fontSize: "13px", maxWidth: "40%", textAlign: "right" }}>
+                  {preVisit.chiefComplaint}
+                </span>
+              </div>
+
+              <span style={{ display: "block", fontSize: "13px", textTransform: "uppercase", color: "color-mix(in srgb, var(--color-text) 60%, transparent)" }}>
+                Chief complaint
+              </span>
+              <p style={{ fontSize: "17px", margin: "var(--space-1) 0 var(--space-3)" }}>{preVisit.chiefComplaint}</p>
+              <hr className="hr" />
+
+              {preVisit.suggestedQuestions?.length > 0 && (
+                <>
+                  <h3>Suggested questions</h3>
+                  <ol style={{ fontSize: "15px", paddingLeft: "20px" }}>
+                    {preVisit.suggestedQuestions.map((q, i) => (
+                      <li key={i} style={{ marginBottom: "8px" }}>
+                        {q}
+                      </li>
+                    ))}
+                  </ol>
+                  <hr className="hr" />
+                </>
+              )}
+
+              {appointment.symptomForm && (
+                <>
+                  <h3>Reported by patient</h3>
+                  <p style={{ fontSize: "15px" }}>&ldquo;{appointment.symptomForm.symptoms}&rdquo;</p>
+                  <p className="muted" style={{ fontSize: "13px" }}>
+                    {appointment.symptomForm.durationDays != null && `${appointment.symptomForm.durationDays} day(s)`}
+                    {appointment.symptomForm.severity ? ` · ${appointment.symptomForm.severity}` : ""}
+                  </p>
+                </>
+              )}
+
+              {preVisit.isFallback && (
+                <div
+                  style={{
+                    border: "1px solid var(--color-divider)",
+                    background: "var(--color-surface)",
+                    padding: "var(--space-3)",
+                    marginTop: "var(--space-4)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "var(--space-3)",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={{ fontSize: "13px" }}>AI was unavailable — this is default content, not a real assessment.</span>
+                  <Button variant="secondary" onClick={handleRegeneratePreVisit} disabled={regeneratingPreVisit}>
+                    {regeneratingPreVisit ? "Regenerating..." : "Regenerate summary"}
+                  </Button>
+                </div>
+              )}
+              {preVisitRegenerateError && <ErrorState message={preVisitRegenerateError} />}
+            </>
+          ) : (
+            <p className="muted">No symptom form was submitted for this booking.</p>
+          )}
+        </div>
+
+        <div className="split-right">
+          <span className="kicker">Post-visit notes</span>
+
+          {appointment.status === "BOOKED" && (
+            <form onSubmit={handleSubmitNotes} className="form">
+              <Field label="Clinical notes">
+                <textarea
+                  className="input"
+                  rows={4}
+                  value={clinicalNotes}
+                  onChange={(e) => setClinicalNotes(e.target.value)}
+                  required
+                />
+              </Field>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "var(--space-2)" }}>
+                <strong>Prescriptions</strong>
+                <Button variant="ghost" type="button" onClick={addPrescriptionRow}>
+                  + Add row
+                </Button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.4fr 1fr 1.3fr 62px 28px",
+                  gap: "8px",
+                  borderBottom: "2px solid var(--color-divider)",
+                  paddingBottom: "var(--space-1)",
+                  fontSize: "11px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: "color-mix(in srgb, var(--color-text) 60%, transparent)",
+                }}
+              >
+                <span>Drug</span>
+                <span>Dose</span>
+                <span>Frequency</span>
+                <span>Days</span>
+                <span></span>
+              </div>
+              {prescriptions.map((p, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.4fr 1fr 1.3fr 62px 28px",
+                    gap: "8px",
+                    alignItems: "center",
+                    borderBottom: "1px solid var(--color-divider)",
+                    padding: "var(--space-2) 0",
+                  }}
+                >
+                  <input
+                    className="input"
+                    placeholder="Drug name"
+                    value={p.drugName}
+                    onChange={(e) => updatePrescription(i, "drugName", e.target.value)}
+                  />
+                  <input
+                    className="input"
+                    placeholder="500mg"
+                    value={p.dosage}
+                    onChange={(e) => updatePrescription(i, "dosage", e.target.value)}
+                  />
+                  <input
+                    className="input"
+                    placeholder="Twice a day"
+                    value={p.frequency}
+                    onChange={(e) => updatePrescription(i, "frequency", e.target.value)}
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    value={p.durationDays}
+                    onChange={(e) => updatePrescription(i, "durationDays", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePrescriptionRow(i)}
+                    className="btn btn-ghost"
+                    style={{ padding: 0, minHeight: "auto" }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              <p className="muted" style={{ fontSize: "12px" }}>
+                Frequency is parsed automatically into medication reminder times.
               </p>
-              <ul>
-                {appointment.preVisitSummary.suggestedQuestions.map((q, i) => (
-                  <li key={i}>{q}</li>
-                ))}
-              </ul>
+
+              {submitError && <ErrorState message={submitError} />}
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Saving..." : "Complete visit"}
+                </Button>
+                {showGeneratingHint && (
+                  <span className="muted" style={{ fontSize: "12px" }}>
+                    Generating AI summary — this can take a few seconds
+                  </span>
+                )}
+              </div>
+            </form>
+          )}
+
+          {appointment.postVisitNote && (
+            <>
+              <Card style={{ marginTop: "var(--space-3)" }}>
+                <span className="card-kicker">Clinical notes</span>
+                <p className="card-body">{appointment.postVisitNote.clinicalNotes}</p>
+              </Card>
+              {appointment.postVisitNote.prescriptions?.length > 0 && (
+                <table className="table" style={{ marginTop: "var(--space-3)" }}>
+                  <thead>
+                    <tr>
+                      <th>Drug</th>
+                      <th>Dose</th>
+                      <th>Frequency</th>
+                      <th>Days</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {appointment.postVisitNote.prescriptions.map((p) => (
+                      <tr key={p.id}>
+                        <td style={{ fontWeight: 800 }}>{p.drugName}</td>
+                        <td>{p.dosage}</td>
+                        <td>{p.frequency}</td>
+                        <td className="tabular">{p.durationDays}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </>
           )}
-        </Card>
-      )}
 
-      {appointment.status === "BOOKED" && (
-        <Card>
-          <h2>Post-visit notes</h2>
-          <form onSubmit={handleSubmitNotes} className="form">
-            <label>
-              Clinical notes
-              <textarea rows={4} value={clinicalNotes} onChange={(e) => setClinicalNotes(e.target.value)} required />
-            </label>
-
-            <div>
-              <strong>Prescriptions</strong>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
-                {prescriptions.map((p, i) => (
-                  <Card key={i} style={{ padding: "12px" }}>
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                      <input
-                        placeholder="Drug name"
-                        value={p.drugName}
-                        onChange={(e) => updatePrescription(i, "drugName", e.target.value)}
-                        style={{ flex: "1 1 140px" }}
-                      />
-                      <input
-                        placeholder="Dosage (e.g. 500mg)"
-                        value={p.dosage}
-                        onChange={(e) => updatePrescription(i, "dosage", e.target.value)}
-                        style={{ flex: "1 1 140px" }}
-                      />
-                      <input
-                        placeholder="Frequency (e.g. twice a day)"
-                        value={p.frequency}
-                        onChange={(e) => updatePrescription(i, "frequency", e.target.value)}
-                        style={{ flex: "1 1 160px" }}
-                      />
-                      <input
-                        type="number"
-                        min={1}
-                        placeholder="Days"
-                        style={{ width: "70px" }}
-                        value={p.durationDays}
-                        onChange={(e) => updatePrescription(i, "durationDays", e.target.value)}
-                      />
-                      <Button variant="danger" type="button" onClick={() => removePrescriptionRow(i)}>
-                        Remove
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-              <Button variant="outline" type="button" onClick={addPrescriptionRow} style={{ marginTop: "10px" }}>
-                Add another prescription
-              </Button>
-            </div>
-
-            {submitError && <ErrorState message={submitError} />}
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Saving..." : "Complete visit"}
-              </Button>
-              {showGeneratingHint && (
-                <span className="muted">Generating AI summary — this can take a few seconds</span>
+          {appointment.postVisitSummary && (
+            <div style={{ marginTop: "var(--space-4)" }}>
+              <span className="kicker">Patient-friendly summary</span>
+              {appointment.postVisitSummary.isFallback && (
+                <div
+                  style={{
+                    border: "1px solid var(--color-divider)",
+                    background: "var(--color-surface)",
+                    padding: "var(--space-3)",
+                    marginBottom: "var(--space-3)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "var(--space-3)",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={{ fontSize: "13px" }}>AI was unavailable — this is default content.</span>
+                  <Button variant="secondary" onClick={handleRegeneratePostVisit} disabled={regeneratingPostVisit}>
+                    {regeneratingPostVisit ? "Regenerating..." : "Regenerate summary"}
+                  </Button>
+                </div>
               )}
+              {postVisitRegenerateError && <ErrorState message={postVisitRegenerateError} />}
+              <p style={{ whiteSpace: "pre-wrap", fontSize: "14px" }}>{appointment.postVisitSummary.summaryText}</p>
             </div>
-          </form>
-        </Card>
-      )}
-
-      {appointment.postVisitNote && (
-        <Card>
-          <h2>Clinical notes (submitted)</h2>
-          <p>{appointment.postVisitNote.clinicalNotes}</p>
-          {appointment.postVisitNote.prescriptions?.length > 0 && (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Drug</th>
-                  <th>Dosage</th>
-                  <th>Frequency</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {appointment.postVisitNote.prescriptions.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.drugName}</td>
-                    <td>{p.dosage}</td>
-                    <td>{p.frequency}</td>
-                    <td>{p.durationDays} day(s)</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
-        </Card>
-      )}
-
-      {appointment.postVisitSummary && (
-        <Card>
-          <h2>Patient-friendly summary</h2>
-          {appointment.postVisitSummary.isFallback && (
-            <AiStatusBanner
-              action={
-                <Button variant="outline" onClick={handleRegeneratePostVisit} disabled={regeneratingPostVisit}>
-                  {regeneratingPostVisit ? "Regenerating..." : "Regenerate"}
-                </Button>
-              }
-            />
-          )}
-          {postVisitRegenerateError && <ErrorState message={postVisitRegenerateError} />}
-          <p style={{ whiteSpace: "pre-wrap" }}>{appointment.postVisitSummary.summaryText}</p>
-        </Card>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

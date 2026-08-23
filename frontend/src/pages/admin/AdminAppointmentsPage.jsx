@@ -1,26 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
-import { EmptyState, ErrorState, LoadingState, Pill } from "../../components/ui";
+import { EmptyState, ErrorState, LoadingState, Tag } from "../../components/ui";
 import { usePolling } from "../../hooks/usePolling";
-
-const STATUS_LABELS = {
-  BOOKED: "Booked",
-  COMPLETED: "Completed",
-  CANCELLED_BY_PATIENT: "Cancelled by patient",
-  CANCELLED_BY_DOCTOR: "Cancelled by doctor",
-  CANCELLED_BY_LEAVE: "Cancelled (leave)",
-  NO_SHOW: "No-show",
-};
-
-const STATUS_TONE = {
-  BOOKED: "blue",
-  COMPLETED: "green",
-  CANCELLED_BY_PATIENT: "orange",
-  CANCELLED_BY_DOCTOR: "orange",
-  CANCELLED_BY_LEAVE: "red",
-  NO_SHOW: "pink",
-};
+import { STATUS_LABELS, STATUS_TAG_VARIANT } from "../../lib/statusTags";
 
 function formatSlotTime(iso) {
   return new Date(iso).toLocaleString(undefined, {
@@ -60,21 +43,49 @@ export default function AdminAppointmentsPage() {
 
   const visible = statusFilter === "ALL" ? appointments : appointments.filter((a) => a.status === statusFilter);
 
+  const booked = appointments.filter((a) => a.status === "BOOKED").length;
+  const completed = appointments.filter((a) => a.status === "COMPLETED").length;
+  const cancelledByLeave = appointments.filter((a) => a.status === "CANCELLED_BY_LEAVE").length;
+
+  const filters = ["ALL", ...Object.keys(STATUS_LABELS)];
+
   return (
     <div>
+      <span className="kicker">Admin</span>
       <h1>All appointments</h1>
+      <hr className="hr" />
 
-      <label style={{ display: "inline-flex", flexDirection: "column", gap: "4px", marginBottom: "12px" }}>
-        Filter by status
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="ALL">All</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="stat-row">
+        <div className="stat-cell">
+          <span className="stat-label">Total</span>
+          <span className="stat-value tabular">{appointments.length}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">Booked</span>
+          <span className="stat-value tabular">{booked}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">Completed</span>
+          <span className="stat-value tabular">{completed}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">Cancelled — leave</span>
+          <span className="stat-value tabular">{cancelledByLeave}</span>
+        </div>
+      </div>
+
+      <div className="segmented" style={{ marginBottom: "var(--space-4)" }}>
+        {filters.map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setStatusFilter(value)}
+            className={statusFilter === value ? "pill-on" : "pill-off"}
+          >
+            {value === "ALL" ? "All" : STATUS_LABELS[value]}
+          </button>
+        ))}
+      </div>
 
       {loading && <LoadingState />}
       {error && <ErrorState message={error} />}
@@ -82,10 +93,10 @@ export default function AdminAppointmentsPage() {
       <table className="table">
         <thead>
           <tr>
+            <th>When</th>
             <th>Patient</th>
             <th>Doctor</th>
             <th>Specialisation</th>
-            <th>Time</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -99,14 +110,14 @@ export default function AdminAppointmentsPage() {
           )}
           {visible.map((appointment) => (
             <tr key={appointment.id}>
+              <td className="tabular">{formatSlotTime(appointment.slotStart)}</td>
               <td>{appointment.patient.name}</td>
               <td>{appointment.doctorProfile.user.name}</td>
               <td>{appointment.doctorProfile.specialisation}</td>
-              <td>{formatSlotTime(appointment.slotStart)}</td>
               <td>
-                <Pill tone={STATUS_TONE[appointment.status] ?? "blue"}>
+                <Tag variant={STATUS_TAG_VARIANT[appointment.status] ?? "neutral"}>
                   {STATUS_LABELS[appointment.status] ?? appointment.status}
-                </Pill>
+                </Tag>
               </td>
             </tr>
           ))}

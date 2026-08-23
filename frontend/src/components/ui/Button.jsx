@@ -1,21 +1,15 @@
 export default function Button({
-  variant = "solid",
-  tone = "blue",
+  variant = "primary",
   type = "button",
+  block = false,
   disabled = false,
   onClick,
   children,
   ...rest
 }) {
-  const variantClass = variant === "solid" ? `btn-${tone}` : `btn-${variant}`;
+  const className = `btn btn-${variant}${block ? " btn-block" : ""}`;
   return (
-    <button
-      type={type}
-      className={`btn ${variantClass}`}
-      disabled={disabled}
-      onClick={onClick}
-      {...rest}
-    >
+    <button type={type} className={className} disabled={disabled} onClick={onClick} {...rest}>
       {children}
     </button>
   );

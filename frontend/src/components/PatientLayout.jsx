@@ -2,25 +2,22 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui";
 
-const navClass = ({ isActive }) => (isActive ? "nav-active" : undefined);
-
 export default function PatientLayout() {
   const { user, logout } = useAuth();
 
   return (
     <div className="page">
-      <header className="page-header">
-        <nav>
-          <NavLink to="/patient" end className={navClass}>
+      <header className="nav">
+        <span className="nav-brand">Healthcare Manager</span>
+        <nav className="nav-links">
+          <NavLink to="/patient" end>
             Find a doctor
           </NavLink>
-          <NavLink to="/patient/appointments" className={navClass}>
-            My appointments
-          </NavLink>
+          <NavLink to="/patient/appointments">My appointments</NavLink>
         </nav>
-        <div>
-          <span className="muted">{user?.email}</span>
-          <Button variant="outline" onClick={logout}>
+        <div className="nav-right">
+          <span className="nav-email">{user?.email}</span>
+          <Button variant="secondary" onClick={logout}>
             Log out
           </Button>
         </div>
