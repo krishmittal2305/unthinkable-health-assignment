@@ -79,6 +79,11 @@
   border-left: none;
 }
 
+.segmented > button.pill-on {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
 .schedule-row:hover {
   background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
