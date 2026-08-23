@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  BOOKED
+  COMPLETED
+  CANCELLED_BY_PATIENT
+  CANCELLED_BY_DOCTOR
+  CANCELLED_BY_LEAVE
+  NO_SHOW
+}
+
+enum UrgencyLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationChannel {
+  EMAIL
+  CALENDAR
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  APPOINTMENT_REMINDER
+  CANCELLATION
+  LEAVE_NOTICE
+  MEDICATION_REMINDER
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ---------- Core identity ----------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  doctorProfile        DoctorProfile?         @relation("DoctorUser")
+  patientAppointments   Appointment[]          @relation("PatientAppointments")
+  doctorAppointments    Appointment[]          @relation("DoctorAppointments")
+  patientSlotHolds      SlotHold[]             @relation("PatientSlotHolds")
+  postVisitNotesWritten PostVisitNote[]        @relation("DoctorPostVisitNotes")
+
+  @@index([role])
+}
+
+model DoctorProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation("DoctorUser", fields: [userId], references: [id], onDelete: Cascade)
+  specialisation   String
+  workingHours     Json // e.g. { "mon": ["09:00","17:00"], "tue": [...], ... }
+  slotDurationMins Int      @default(30)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  leaveDays     LeaveDay[]
+  appointments  Appointment[]     @relation("DoctorProfileAppointments")
+  slotHolds     SlotHold[]        @relation("DoctorProfileSlotHolds")
+  calendarToken GoogleCalendarToken?
+
+  @@index([specialisation])
+}
+
+model LeaveDay {
+  id        String        @id @default(uuid())
+  doctorId  String
+  doctor    DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  date      DateTime // stored as date-at-midnight UTC
+  reason    String?
+  createdAt DateTime      @default(now())
+
+  @@unique([doctorId, date])
+}
+
+// ---------- Booking flow ----------
+
+// Short-lived hold on a slot while the patient fills the symptom form,
+// before the appointment is confirmed. Prevents double-booking together
+// with the unique constraint on Appointment(doctorId, slotStart).
+model SlotHold {
+  id         String        @id @default(uuid())
+  doctorId   String
+  doctor     DoctorProfile @relation("DoctorProfileSlotHolds", fields: [doctorId], references: [id], onDelete: Cascade)
+  patientId  String
+  patient    User          @relation("PatientSlotHolds", fields: [patientId], references: [id], onDelete: Cascade)
+  slotStart  DateTime
+  slotEnd    DateTime
+  expiresAt  DateTime
+  createdAt  DateTime      @default(now())
+
+  @@unique([doctorId, slotStart])
+  @@index([expiresAt])
+}
+
+model Appointment {
+  id        String            @id @default(uuid())
+  patientId String
+  patient   User              @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  String
+  doctorProfile DoctorProfile @relation("DoctorProfileAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorUserId  String
+  doctorUser    User          @relation("DoctorAppointments", fields: [doctorUserId], references: [id], onDelete: Cascade)
+
+  slotStart DateTime
+  slotEnd   DateTime
+  status    AppointmentStatus @default(BOOKED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  symptomForm       SymptomForm?
+  preVisitSummary   PreVisitSummary?
+  postVisitNote     PostVisitNote?
+  postVisitSummary  PostVisitSummary?
+  medicationReminders MedicationReminder[]
+  calendarEvent     CalendarEvent?
+
+  @@unique([doctorId, slotStart])
+  @@index([patientId])
+  @@index([doctorId, slotStart])
+}
+
+// ---------- Pre-visit ----------
+
+model SymptomForm {
+  id            String      @id @default(uuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  symptoms      String
+  durationDays  Int?
+  severity      String?
+  createdAt     DateTime    @default(now())
+}
+
+model PreVisitSummary {
+  id                String       @id @default(uuid())
+  appointmentId     String       @unique
+  appointment       Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  urgencyLevel      UrgencyLevel
+  chiefComplaint    String
+  suggestedQuestions Json // string[]
+  rawLlmResponse    String?
+  isFallback        Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+}
+
+// ---------- Post-visit ----------
+
+model PostVisitNote {
+  id            String      @id @default(uuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctorUserId  String
+  doctorUser    User        @relation("DoctorPostVisitNotes", fields: [doctorUserId], references: [id], onDelete: Cascade)
+  clinicalNotes String
+  createdAt     DateTime    @default(now())
+
+  prescriptions Prescription[]
+}
+
+model Prescription {
+  id              String        @id @default(uuid())
+  postVisitNoteId String
+  postVisitNote   PostVisitNote @relation(fields: [postVisitNoteId], references: [id], onDelete: Cascade)
+  drugName        String
+  dosage          String
+  frequency       String // e.g. "twice a day", "every 8 hours"
+  durationDays    Int
+  createdAt       DateTime      @default(now())
+
+  medicationReminders MedicationReminder[]
+}
+
+model PostVisitSummary {
+  id             String      @id @default(uuid())
+  appointmentId  String      @unique
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  summaryText    String
+  medicationPlan Json? // structured schedule derived from prescriptions
+  followUpSteps  Json? // string[]
+  rawLlmResponse String?
+  isFallback     Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+}
+
+model MedicationReminder {
+  id             String       @id @default(uuid())
+  appointmentId  String
+  appointment    Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  remindAt       DateTime
+  sent           Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([remindAt, sent])
+}
+
+// ---------- Notifications ----------
+
+model NotificationLog {
+  id          String              @id @default(uuid())
+  channel     NotificationChannel
+  type        NotificationType
+  recipientId String
+  subject     String?
+  payload     Json
+  status      NotificationStatus  @default(PENDING)
+  retryCount  Int                 @default(0)
+  lastError   String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status, retryCount])
+}
+
+// ---------- Google Calendar ----------
+
+model GoogleCalendarToken {
+  id           String        @id @default(uuid())
+  doctorId     String        @unique
+  doctor       DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  accessToken  String
+  refreshToken String
+  expiryDate   DateTime
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model CalendarEvent {
+  id            String      @id @default(uuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  googleEventId String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
