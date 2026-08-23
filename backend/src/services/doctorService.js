@@ -122,20 +122,9 @@ async function deleteDoctor(doctorId) {
   await prisma.user.delete({ where: { id: doctorProfile.userId } });
 }
 
-async function addLeaveDay(doctorId, { date, reason }) {
-  await getDoctorById(doctorId); // 404s if missing
-
-  const existing = await prisma.leaveDay.findUnique({
-    where: { doctorId_date: { doctorId, date } },
-  });
-  if (existing) {
-    throw new AppError(409, "This doctor is already marked on leave for that date");
-  }
-
-  return prisma.leaveDay.create({
-    data: { doctorId, date, reason },
-  });
-}
+// Leave-marking itself (with its appointment-cancellation / notification
+// side effects) lives in leaveService.markDoctorOnLeave — this module stays
+// focused on doctor profile CRUD.
 
 async function removeLeaveDay(doctorId, leaveDayId) {
   const leaveDay = await prisma.leaveDay.findUnique({ where: { id: leaveDayId } });
@@ -155,6 +144,5 @@ module.exports = {
   getDoctorById,
   updateDoctorProfile,
   deleteDoctor,
-  addLeaveDay,
   removeLeaveDay,
 };

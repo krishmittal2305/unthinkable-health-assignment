@@ -1,4 +1,5 @@
 const doctorService = require("../services/doctorService");
+const leaveService = require("../services/leaveService");
 const {
   createDoctorSchema,
   updateDoctorProfileSchema,
@@ -35,8 +36,11 @@ async function deleteDoctor(req, res) {
 
 async function addLeaveDay(req, res) {
   const input = leaveDaySchema.parse(req.body);
-  const leaveDay = await doctorService.addLeaveDay(req.params.doctorId, input);
-  res.status(201).json({ leaveDay });
+  const { leaveDay, cancelledAppointmentCount } = await leaveService.markDoctorOnLeave(
+    req.params.doctorId,
+    input,
+  );
+  res.status(201).json({ leaveDay, cancelledAppointmentCount });
 }
 
 async function removeLeaveDay(req, res) {

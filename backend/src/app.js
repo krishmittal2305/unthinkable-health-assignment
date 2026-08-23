@@ -4,6 +4,7 @@ const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 const { authRouter } = require("./routes/authRoutes");
 const { adminDoctorRouter } = require("./routes/doctorRoutes");
 const { publicDoctorRouter } = require("./routes/publicDoctorRoutes");
+const { appointmentRouter } = require("./routes/appointmentRoutes");
 
 function createApp() {
   const app = express();
@@ -18,6 +19,7 @@ function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/admin/doctors", adminDoctorRouter);
   app.use("/api/doctors", publicDoctorRouter);
+  app.use("/api/appointments", appointmentRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
