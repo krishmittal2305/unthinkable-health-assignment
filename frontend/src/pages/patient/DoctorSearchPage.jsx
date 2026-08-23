@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../../api/client";
+import { Button, Card, EmptyState, ErrorState, LoadingState } from "../../components/ui";
 
 export default function DoctorSearchPage() {
   const [specialisation, setSpecialisation] = useState("");
@@ -43,24 +44,24 @@ export default function DoctorSearchPage() {
             placeholder="e.g. Cardiology"
           />
         </label>
-        <button type="submit">Search</button>
+        <Button type="submit">Search</Button>
       </form>
 
-      {loading && <p>Loading...</p>}
-      {error && <p className="form-error">{error}</p>}
+      {loading && <LoadingState />}
+      {error && <ErrorState message={error} />}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px" }}>
-        {!loading && doctors.length === 0 && <p className="muted">No doctors found.</p>}
+        {!loading && doctors.length === 0 && <EmptyState label="No doctors found." />}
         {doctors.map((doctor) => (
-          <div key={doctor.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Card key={doctor.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <strong>{doctor.name}</strong>
               <p className="muted">{doctor.specialisation}</p>
             </div>
             <Link to={`/patient/book/${doctor.id}`}>
-              <button>Book appointment</button>
+              <Button>Book appointment</Button>
             </Link>
-          </div>
+          </Card>
         ))}
       </div>
     </div>

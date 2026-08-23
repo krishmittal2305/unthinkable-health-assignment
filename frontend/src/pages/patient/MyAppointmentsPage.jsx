@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { AiStatusBanner, Button, Card, EmptyState, ErrorState, LoadingState, Pill } from "../../components/ui";
+import { usePolling } from "../../hooks/usePolling";
 
 const STATUS_LABELS = {
   BOOKED: "Booked",
@@ -10,6 +12,17 @@ const STATUS_LABELS = {
   CANCELLED_BY_LEAVE: "Cancelled (doctor on leave)",
   NO_SHOW: "No-show",
 };
+
+const STATUS_TONE = {
+  BOOKED: "blue",
+  COMPLETED: "green",
+  CANCELLED_BY_PATIENT: "orange",
+  CANCELLED_BY_DOCTOR: "orange",
+  CANCELLED_BY_LEAVE: "red",
+  NO_SHOW: "pink",
+};
+
+const URGENCY_TONE = { LOW: "green", MEDIUM: "yellow", HIGH: "red" };
 
 function formatSlotTime(iso) {
   return new Date(iso).toLocaleString(undefined, {
@@ -28,8 +41,7 @@ export default function MyAppointmentsPage() {
   const [error, setError] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
 
-  async function load() {
-    setLoading(true);
+  const load = useCallback(async () => {
     setError(null);
     try {
       const data = await apiFetch("/api/appointments/mine", { token });
@@ -39,12 +51,14 @@ export default function MyAppointmentsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
   useEffect(() => {
+    setLoading(true);
     load();
+  }, [load]);
 
-  }, []);
+  usePolling(load, 25000);
 
   async function handleCancel(appointmentId) {
     if (!confirm("Cancel this appointment?")) return;
@@ -62,14 +76,14 @@ export default function MyAppointmentsPage() {
   return (
     <div>
       <h1>My appointments</h1>
-      {loading && <p>Loading...</p>}
-      {error && <p className="form-error">{error}</p>}
+      {loading && <LoadingState />}
+      {error && <ErrorState message={error} />}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {!loading && appointments.length === 0 && <p className="muted">No appointments yet.</p>}
+        {!loading && appointments.length === 0 && <EmptyState label="No appointments yet." />}
 
         {appointments.map((appointment) => (
-          <div key={appointment.id} className="card">
+          <Card key={appointment.id}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <div>
                 <strong>{appointment.doctorProfile.user.name}</strong>
@@ -77,16 +91,18 @@ export default function MyAppointmentsPage() {
                 <p className="muted">{formatSlotTime(appointment.slotStart)}</p>
               </div>
               <div style={{ textAlign: "right" }}>
-                <span>{STATUS_LABELS[appointment.status] ?? appointment.status}</span>
+                <Pill tone={STATUS_TONE[appointment.status] ?? "blue"}>
+                  {STATUS_LABELS[appointment.status] ?? appointment.status}
+                </Pill>
                 {appointment.status === "BOOKED" && (
-                  <div>
-                    <button
-                      className="button-danger"
+                  <div style={{ marginTop: "8px" }}>
+                    <Button
+                      variant="danger"
                       onClick={() => handleCancel(appointment.id)}
                       disabled={cancellingId === appointment.id}
                     >
                       {cancellingId === appointment.id ? "Cancelling..." : "Cancel"}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -94,25 +110,23 @@ export default function MyAppointmentsPage() {
 
             {appointment.preVisitSummary && (
               <div style={{ marginTop: "12px", borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
-                <h3 style={{ fontSize: "15px", margin: "0 0 4px" }}>
-                  Pre-visit summary
-                  {appointment.preVisitSummary.isFallback && (
-                    <span className="muted"> (AI summary unavailable — showing basic info)</span>
-                  )}
-                </h3>
-                <p className="muted">Urgency: {appointment.preVisitSummary.urgencyLevel}</p>
+                <h3>Pre-visit summary</h3>
+                {appointment.preVisitSummary.isFallback && (
+                  <AiStatusBanner message="AI summary unavailable — showing basic info" />
+                )}
+                <p style={{ marginBottom: "6px" }}>
+                  <Pill tone={URGENCY_TONE[appointment.preVisitSummary.urgencyLevel] ?? "blue"}>
+                    {appointment.preVisitSummary.urgencyLevel}
+                  </Pill>
+                </p>
                 <p>{appointment.preVisitSummary.chiefComplaint}</p>
               </div>
             )}
 
             {appointment.postVisitSummary && (
               <div style={{ marginTop: "12px", borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
-                <h3 style={{ fontSize: "15px", margin: "0 0 4px" }}>
-                  Visit summary
-                  {appointment.postVisitSummary.isFallback && (
-                    <span className="muted"> (AI summary unavailable)</span>
-                  )}
-                </h3>
+                <h3>Visit summary</h3>
+                {appointment.postVisitSummary.isFallback && <AiStatusBanner message="AI summary unavailable" />}
                 <p style={{ whiteSpace: "pre-wrap" }}>{appointment.postVisitSummary.summaryText}</p>
                 {appointment.postVisitSummary.followUpSteps?.length > 0 && (
                   <ul>
@@ -126,7 +140,7 @@ export default function MyAppointmentsPage() {
 
             {appointment.postVisitNote?.prescriptions?.length > 0 && (
               <div style={{ marginTop: "12px", borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
-                <h3 style={{ fontSize: "15px", margin: "0 0 4px" }}>Prescription</h3>
+                <h3>Prescription</h3>
                 <table className="table">
                   <thead>
                     <tr>
@@ -149,7 +163,7 @@ export default function MyAppointmentsPage() {
                 </table>
               </div>
             )}
-          </div>
+          </Card>
         ))}
       </div>
     </div>
