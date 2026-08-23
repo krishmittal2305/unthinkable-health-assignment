@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { Button, ErrorState } from "../components/ui";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -54,10 +55,10 @@ export default function RegisterPage() {
           Phone (optional)
           <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         </label>
-        {error && <p className="form-error">{error}</p>}
-        <button type="submit" disabled={submitting}>
+        {error && <ErrorState message={error} />}
+        <Button type="submit" disabled={submitting}>
           {submitting ? "Creating account..." : "Create account"}
-        </button>
+        </Button>
       </form>
       <p className="muted" style={{ marginTop: "12px" }}>
         Already have an account? <Link to="/login">Log in</Link>

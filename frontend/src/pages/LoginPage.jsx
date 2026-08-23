@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { Button, ErrorState } from "../components/ui";
 
 const ROLE_HOME = {
   ADMIN: "/admin/doctors",
@@ -42,10 +43,10 @@ export default function LoginPage() {
           Password
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
-        {error && <p className="form-error">{error}</p>}
-        <button type="submit" disabled={submitting}>
+        {error && <ErrorState message={error} />}
+        <Button type="submit" disabled={submitting}>
           {submitting ? "Logging in..." : "Log in"}
-        </button>
+        </Button>
       </form>
       <p className="muted" style={{ marginTop: "12px" }}>
         New patient? <Link to="/register">Create an account</Link>

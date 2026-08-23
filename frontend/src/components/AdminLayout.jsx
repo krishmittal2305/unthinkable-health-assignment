@@ -1,5 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { Button } from "./ui";
+
+const navClass = ({ isActive }) => (isActive ? "nav-active" : undefined);
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
@@ -7,15 +10,19 @@ export default function AdminLayout() {
   return (
     <div className="page">
       <header className="page-header">
-        <nav style={{ display: "flex", gap: "16px" }}>
-          <NavLink to="/admin/doctors">Doctors</NavLink>
-          <NavLink to="/admin/appointments">All appointments</NavLink>
+        <nav>
+          <NavLink to="/admin/doctors" className={navClass}>
+            Doctors
+          </NavLink>
+          <NavLink to="/admin/appointments" className={navClass}>
+            All appointments
+          </NavLink>
         </nav>
         <div>
           <span className="muted">{user?.email}</span>
-          <button onClick={logout} className="button-secondary">
+          <Button variant="outline" onClick={logout}>
             Log out
-          </button>
+          </Button>
         </div>
       </header>
       <Outlet />
