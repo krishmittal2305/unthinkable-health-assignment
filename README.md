@@ -78,15 +78,24 @@ npm run dev                # http://localhost:5173
 
 ### 4. First login
 
-The seed script creates one admin account: `admin@clinic.test` / `ChangeMe123!` (override via
-`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` before seeding). Log in at `/login`:
+The seed script creates one admin account (override via `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` before
+seeding). Doctor and patient accounts aren't seeded — an admin creates doctors, and patients self-register
+— but for quick testing you can use (or recreate) these:
+
+| Role    | Email                    | Password       | Notes |
+|---------|--------------------------|----------------|-------|
+| Admin   | `admin@clinic.test`      | `ChangeMe123!` | Created by `npm run prisma:seed` |
+| Doctor  | `dr.sharma@clinic.test`  | `password123`  | Example: Cardiology, Mon/Tue 09:00–17:00 UTC — create via the admin **Doctors** tab |
+| Patient | `patient1@test.com`      | `password123`  | Create via `/register` |
+
+Log in at `/login`:
 
 - **Admin** → `/admin/doctors`: create doctor accounts (specialisation, working hours, slot duration),
   manage leave days, view all appointments at `/admin/appointments`.
 - **Doctor** → `/doctor`: created by admin, not self-registered. View schedule, see AI pre-visit
   summaries, submit post-visit notes + prescriptions.
 - **Patient** → `/patient`: self-register at `/register`. Search doctors, book a slot, fill a symptom
-  form, view appointments and AI summaries.
+  form, view appointments, AI summaries, and prescriptions.
 
 ## Background jobs
 
