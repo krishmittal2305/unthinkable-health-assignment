@@ -142,7 +142,16 @@ model Appointment {
   medicationReminders MedicationReminder[]
   calendarEvent     CalendarEvent?
 
-  @@unique([doctorId, slotStart])
+  // NOTE: no @@unique([doctorId, slotStart]) here on purpose. A plain unique
+  // constraint would permanently block a slot after a single cancellation,
+  // since the cancelled row would still occupy that key forever. Instead a
+  // partial unique index (doctorId, slotStart) WHERE status IN ('BOOKED',
+  // 'COMPLETED') is added via raw SQL in the
+  // 20260823_partial_unique_appointment_slot migration — only "occupying"
+  // statuses block rebooking; cancelled slots free up immediately. This is
+  // still the real double-booking guard: two concurrent inserts for the same
+  // doctor+slot+active-status race on that index and one gets a unique
+  // violation, which the booking service turns into a 409.
   @@index([patientId])
   @@index([doctorId, slotStart])
 }

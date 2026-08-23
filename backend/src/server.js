@@ -1,5 +1,5 @@
-import { createApp } from "./app";
-import { env } from "./lib/env";
+const { createApp } = require("./app");
+const { env } = require("./lib/env");
 
 const app = createApp();
 
