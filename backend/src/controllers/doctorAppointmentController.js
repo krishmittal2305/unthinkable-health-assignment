@@ -20,10 +20,24 @@ async function regeneratePreVisitSummary(req, res) {
   res.json({ preVisitSummary });
 }
 
+async function regeneratePostVisitSummary(req, res) {
+  const postVisitSummary = await postVisitService.regeneratePostVisitSummary(
+    req.user.userId,
+    req.params.appointmentId,
+  );
+  res.json({ postVisitSummary });
+}
+
 async function submitPostVisitNotes(req, res) {
   const input = postVisitNotesSchema.parse(req.body);
   const result = await postVisitService.submitPostVisitNotes(req.user.userId, req.params.appointmentId, input);
   res.status(201).json(result);
 }
 
-module.exports = { listMyPatients, getAppointment, regeneratePreVisitSummary, submitPostVisitNotes };
+module.exports = {
+  listMyPatients,
+  getAppointment,
+  regeneratePreVisitSummary,
+  regeneratePostVisitSummary,
+  submitPostVisitNotes,
+};

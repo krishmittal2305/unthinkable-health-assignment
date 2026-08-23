@@ -66,4 +66,39 @@ async function submitPostVisitNotes(doctorUserId, appointmentId, { clinicalNotes
   return { postVisitNote, postVisitSummary };
 }
 
-module.exports = { submitPostVisitNotes };
+async function regeneratePostVisitSummary(doctorUserId, appointmentId) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: { postVisitNote: true },
+  });
+
+  if (!appointment || appointment.doctorUserId !== doctorUserId) {
+    throw new AppError(404, "Appointment not found");
+  }
+  if (!appointment.postVisitNote) {
+    throw new AppError(409, "This appointment has no post-visit notes to summarize");
+  }
+
+  const summary = await llmService.generatePostVisitSummary(appointment.postVisitNote.clinicalNotes);
+
+  return prisma.postVisitSummary.upsert({
+    where: { appointmentId },
+    update: {
+      summaryText: summary.summaryText,
+      medicationPlan: summary.medicationSchedule,
+      followUpSteps: summary.followUpSteps,
+      rawLlmResponse: summary.rawResponse,
+      isFallback: summary.isFallback,
+    },
+    create: {
+      appointmentId,
+      summaryText: summary.summaryText,
+      medicationPlan: summary.medicationSchedule,
+      followUpSteps: summary.followUpSteps,
+      rawLlmResponse: summary.rawResponse,
+      isFallback: summary.isFallback,
+    },
+  });
+}
+
+module.exports = { submitPostVisitNotes, regeneratePostVisitSummary };

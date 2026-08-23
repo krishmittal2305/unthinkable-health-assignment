@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { EmptyState, ErrorState, LoadingState, Pill } from "../../components/ui";
+import { usePolling } from "../../hooks/usePolling";
 
 const STATUS_LABELS = {
   BOOKED: "Booked",
@@ -12,7 +14,16 @@ const STATUS_LABELS = {
   NO_SHOW: "No-show",
 };
 
-const URGENCY_COLORS = { HIGH: "#d64545", MEDIUM: "#c88a1a", LOW: "#2f9e44" };
+const STATUS_TONE = {
+  BOOKED: "blue",
+  COMPLETED: "green",
+  CANCELLED_BY_PATIENT: "orange",
+  CANCELLED_BY_DOCTOR: "orange",
+  CANCELLED_BY_LEAVE: "red",
+  NO_SHOW: "pink",
+};
+
+const URGENCY_TONE = { LOW: "green", MEDIUM: "yellow", HIGH: "red" };
 
 function formatSlotTime(iso) {
   return new Date(iso).toLocaleString(undefined, {
@@ -30,18 +41,30 @@ export default function DoctorSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    apiFetch("/api/doctor/appointments", { token })
-      .then((data) => setAppointments(data.appointments))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await apiFetch("/api/doctor/appointments", { token });
+      setAppointments(data.appointments);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    setLoading(true);
+    load();
+  }, [load]);
+
+  usePolling(load, 25000);
 
   return (
     <div>
       <h1>My schedule</h1>
-      {loading && <p>Loading...</p>}
-      {error && <p className="form-error">{error}</p>}
+      {loading && <LoadingState />}
+      {error && <ErrorState message={error} />}
 
       <table className="table">
         <thead>
@@ -56,8 +79,8 @@ export default function DoctorSchedulePage() {
         <tbody>
           {!loading && appointments.length === 0 && (
             <tr>
-              <td colSpan={5} className="muted">
-                No appointments yet.
+              <td colSpan={5}>
+                <EmptyState label="No appointments yet." />
               </td>
             </tr>
           )}
@@ -65,12 +88,16 @@ export default function DoctorSchedulePage() {
             <tr key={appointment.id}>
               <td>{appointment.patient.name}</td>
               <td>{formatSlotTime(appointment.slotStart)}</td>
-              <td>{STATUS_LABELS[appointment.status] ?? appointment.status}</td>
+              <td>
+                <Pill tone={STATUS_TONE[appointment.status] ?? "blue"}>
+                  {STATUS_LABELS[appointment.status] ?? appointment.status}
+                </Pill>
+              </td>
               <td>
                 {appointment.preVisitSummary && (
-                  <span style={{ color: URGENCY_COLORS[appointment.preVisitSummary.urgencyLevel] ?? "inherit" }}>
+                  <Pill tone={URGENCY_TONE[appointment.preVisitSummary.urgencyLevel] ?? "blue"}>
                     {appointment.preVisitSummary.urgencyLevel}
-                  </span>
+                  </Pill>
                 )}
               </td>
               <td>

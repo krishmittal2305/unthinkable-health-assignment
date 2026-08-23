@@ -14,6 +14,10 @@ doctorAppointmentRouter.post(
   asyncHandler(doctorAppointmentController.regeneratePreVisitSummary),
 );
 doctorAppointmentRouter.post(
+  "/:appointmentId/regenerate-post-visit-summary",
+  asyncHandler(doctorAppointmentController.regeneratePostVisitSummary),
+);
+doctorAppointmentRouter.post(
   "/:appointmentId/post-visit",
   asyncHandler(doctorAppointmentController.submitPostVisitNotes),
 );

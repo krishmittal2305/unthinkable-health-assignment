@@ -2,8 +2,20 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiFetch } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { AiStatusBanner, Button, Card, ErrorState, LoadingState, Pill } from "../../components/ui";
 
 const EMPTY_PRESCRIPTION = { drugName: "", dosage: "", frequency: "", durationDays: "" };
+
+const STATUS_TONE = {
+  BOOKED: "blue",
+  COMPLETED: "green",
+  CANCELLED_BY_PATIENT: "orange",
+  CANCELLED_BY_DOCTOR: "orange",
+  CANCELLED_BY_LEAVE: "red",
+  NO_SHOW: "pink",
+};
+
+const URGENCY_TONE = { LOW: "green", MEDIUM: "yellow", HIGH: "red" };
 
 function formatSlotTime(iso) {
   return new Date(iso).toLocaleString(undefined, {
@@ -27,8 +39,12 @@ export default function DoctorAppointmentDetailPage() {
   const [prescriptions, setPrescriptions] = useState([{ ...EMPTY_PRESCRIPTION }]);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [regenerateError, setRegenerateError] = useState(null);
+  const [showGeneratingHint, setShowGeneratingHint] = useState(false);
+
+  const [regeneratingPreVisit, setRegeneratingPreVisit] = useState(false);
+  const [preVisitRegenerateError, setPreVisitRegenerateError] = useState(null);
+  const [regeneratingPostVisit, setRegeneratingPostVisit] = useState(false);
+  const [postVisitRegenerateError, setPostVisitRegenerateError] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -47,9 +63,9 @@ export default function DoctorAppointmentDetailPage() {
     load();
   }, [appointmentId]);
 
-  async function handleRegenerateSummary() {
-    setRegenerateError(null);
-    setRegenerating(true);
+  async function handleRegeneratePreVisit() {
+    setPreVisitRegenerateError(null);
+    setRegeneratingPreVisit(true);
     try {
       const data = await apiFetch(`/api/doctor/appointments/${appointmentId}/regenerate-pre-visit-summary`, {
         method: "POST",
@@ -57,9 +73,25 @@ export default function DoctorAppointmentDetailPage() {
       });
       setAppointment((current) => ({ ...current, preVisitSummary: data.preVisitSummary }));
     } catch (err) {
-      setRegenerateError(err.message);
+      setPreVisitRegenerateError(err.message);
     } finally {
-      setRegenerating(false);
+      setRegeneratingPreVisit(false);
+    }
+  }
+
+  async function handleRegeneratePostVisit() {
+    setPostVisitRegenerateError(null);
+    setRegeneratingPostVisit(true);
+    try {
+      const data = await apiFetch(`/api/doctor/appointments/${appointmentId}/regenerate-post-visit-summary`, {
+        method: "POST",
+        token,
+      });
+      setAppointment((current) => ({ ...current, postVisitSummary: data.postVisitSummary }));
+    } catch (err) {
+      setPostVisitRegenerateError(err.message);
+    } finally {
+      setRegeneratingPostVisit(false);
     }
   }
 
@@ -79,6 +111,7 @@ export default function DoctorAppointmentDetailPage() {
     event.preventDefault();
     setSubmitError(null);
     setSubmitting(true);
+    const hintTimer = setTimeout(() => setShowGeneratingHint(true), 1000);
     try {
       const validPrescriptions = prescriptions
         .filter((p) => p.drugName.trim())
@@ -93,53 +126,62 @@ export default function DoctorAppointmentDetailPage() {
     } catch (err) {
       setSubmitError(err.message);
     } finally {
+      clearTimeout(hintTimer);
+      setShowGeneratingHint(false);
       setSubmitting(false);
     }
   }
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p className="form-error">{error}</p>;
+  if (loading) return <LoadingState />;
+  if (error) return <ErrorState message={error} />;
   if (!appointment) return null;
 
   return (
     <div>
       <h1>Appointment with {appointment.patient.name}</h1>
       <p className="muted">
-        {formatSlotTime(appointment.slotStart)} · {appointment.status}
+        {formatSlotTime(appointment.slotStart)} · <Pill tone={STATUS_TONE[appointment.status] ?? "blue"}>{appointment.status}</Pill>
       </p>
-      <p className="muted">
+      <p className="muted" style={{ marginTop: "6px" }}>
         {appointment.patient.email}
         {appointment.patient.phone ? ` · ${appointment.patient.phone}` : ""}
       </p>
 
       {appointment.symptomForm && (
-        <section className="card">
+        <Card>
           <h2>Symptoms reported by patient</h2>
           <p>{appointment.symptomForm.symptoms}</p>
           {appointment.symptomForm.durationDays != null && (
             <p className="muted">Duration: {appointment.symptomForm.durationDays} day(s)</p>
           )}
           {appointment.symptomForm.severity && <p className="muted">Severity: {appointment.symptomForm.severity}</p>}
-        </section>
+        </Card>
       )}
 
       {appointment.preVisitSummary && (
-        <section className="card">
-          <h2>
-            AI pre-visit summary
-            {appointment.preVisitSummary.isFallback && (
-              <span className="muted"> (AI unavailable — showing basic info)</span>
-            )}
-          </h2>
-          <p>
-            <strong>Urgency:</strong> {appointment.preVisitSummary.urgencyLevel}
+        <Card>
+          <h2>AI pre-visit summary</h2>
+          {appointment.preVisitSummary.isFallback && (
+            <AiStatusBanner
+              action={
+                <Button variant="outline" onClick={handleRegeneratePreVisit} disabled={regeneratingPreVisit}>
+                  {regeneratingPreVisit ? "Regenerating..." : "Regenerate"}
+                </Button>
+              }
+            />
+          )}
+          {preVisitRegenerateError && <ErrorState message={preVisitRegenerateError} />}
+          <p style={{ margin: "8px 0" }}>
+            <Pill tone={URGENCY_TONE[appointment.preVisitSummary.urgencyLevel] ?? "blue"}>
+              {appointment.preVisitSummary.urgencyLevel}
+            </Pill>
           </p>
           <p>
             <strong>Chief complaint:</strong> {appointment.preVisitSummary.chiefComplaint}
           </p>
           {appointment.preVisitSummary.suggestedQuestions?.length > 0 && (
             <>
-              <p>
+              <p style={{ marginTop: "8px" }}>
                 <strong>Suggested questions:</strong>
               </p>
               <ul>
@@ -149,19 +191,11 @@ export default function DoctorAppointmentDetailPage() {
               </ul>
             </>
           )}
-          {appointment.preVisitSummary.isFallback && (
-            <>
-              <button className="button-secondary" onClick={handleRegenerateSummary} disabled={regenerating}>
-                {regenerating ? "Regenerating..." : "Regenerate AI summary"}
-              </button>
-              {regenerateError && <p className="form-error">{regenerateError}</p>}
-            </>
-          )}
-        </section>
+        </Card>
       )}
 
       {appointment.status === "BOOKED" && (
-        <section className="card">
+        <Card>
           <h2>Post-visit notes</h2>
           <form onSubmit={handleSubmitNotes} className="form">
             <label>
@@ -171,51 +205,63 @@ export default function DoctorAppointmentDetailPage() {
 
             <div>
               <strong>Prescriptions</strong>
-              {prescriptions.map((p, i) => (
-                <div key={i} style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
-                  <input
-                    placeholder="Drug name"
-                    value={p.drugName}
-                    onChange={(e) => updatePrescription(i, "drugName", e.target.value)}
-                  />
-                  <input
-                    placeholder="Dosage (e.g. 500mg)"
-                    value={p.dosage}
-                    onChange={(e) => updatePrescription(i, "dosage", e.target.value)}
-                  />
-                  <input
-                    placeholder="Frequency (e.g. twice a day)"
-                    value={p.frequency}
-                    onChange={(e) => updatePrescription(i, "frequency", e.target.value)}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder="Days"
-                    style={{ width: "70px" }}
-                    value={p.durationDays}
-                    onChange={(e) => updatePrescription(i, "durationDays", e.target.value)}
-                  />
-                  <button type="button" className="button-danger" onClick={() => removePrescriptionRow(i)}>
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button type="button" className="button-secondary" onClick={addPrescriptionRow} style={{ marginTop: "8px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
+                {prescriptions.map((p, i) => (
+                  <Card key={i} style={{ padding: "12px" }}>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                      <input
+                        placeholder="Drug name"
+                        value={p.drugName}
+                        onChange={(e) => updatePrescription(i, "drugName", e.target.value)}
+                        style={{ flex: "1 1 140px" }}
+                      />
+                      <input
+                        placeholder="Dosage (e.g. 500mg)"
+                        value={p.dosage}
+                        onChange={(e) => updatePrescription(i, "dosage", e.target.value)}
+                        style={{ flex: "1 1 140px" }}
+                      />
+                      <input
+                        placeholder="Frequency (e.g. twice a day)"
+                        value={p.frequency}
+                        onChange={(e) => updatePrescription(i, "frequency", e.target.value)}
+                        style={{ flex: "1 1 160px" }}
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Days"
+                        style={{ width: "70px" }}
+                        value={p.durationDays}
+                        onChange={(e) => updatePrescription(i, "durationDays", e.target.value)}
+                      />
+                      <Button variant="danger" type="button" onClick={() => removePrescriptionRow(i)}>
+                        Remove
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+              <Button variant="outline" type="button" onClick={addPrescriptionRow} style={{ marginTop: "10px" }}>
                 Add another prescription
-              </button>
+              </Button>
             </div>
 
-            {submitError && <p className="form-error">{submitError}</p>}
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Saving..." : "Complete visit"}
-            </button>
+            {submitError && <ErrorState message={submitError} />}
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Saving..." : "Complete visit"}
+              </Button>
+              {showGeneratingHint && (
+                <span className="muted">Generating AI summary — this can take a few seconds</span>
+              )}
+            </div>
           </form>
-        </section>
+        </Card>
       )}
 
       {appointment.postVisitNote && (
-        <section className="card">
+        <Card>
           <h2>Clinical notes (submitted)</h2>
           <p>{appointment.postVisitNote.clinicalNotes}</p>
           {appointment.postVisitNote.prescriptions?.length > 0 && (
@@ -240,17 +286,24 @@ export default function DoctorAppointmentDetailPage() {
               </tbody>
             </table>
           )}
-        </section>
+        </Card>
       )}
 
       {appointment.postVisitSummary && (
-        <section className="card">
-          <h2>
-            Patient-friendly summary
-            {appointment.postVisitSummary.isFallback && <span className="muted"> (AI unavailable)</span>}
-          </h2>
+        <Card>
+          <h2>Patient-friendly summary</h2>
+          {appointment.postVisitSummary.isFallback && (
+            <AiStatusBanner
+              action={
+                <Button variant="outline" onClick={handleRegeneratePostVisit} disabled={regeneratingPostVisit}>
+                  {regeneratingPostVisit ? "Regenerating..." : "Regenerate"}
+                </Button>
+              }
+            />
+          )}
+          {postVisitRegenerateError && <ErrorState message={postVisitRegenerateError} />}
           <p style={{ whiteSpace: "pre-wrap" }}>{appointment.postVisitSummary.summaryText}</p>
-        </section>
+        </Card>
       )}
     </div>
   );
