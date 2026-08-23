@@ -1,4 +1,6 @@
 const appointmentService = require("../services/appointmentService");
+const postVisitService = require("../services/postVisitService");
+const { postVisitNotesSchema } = require("../validation/postVisitSchemas");
 
 async function listMyPatients(req, res) {
   const appointments = await appointmentService.listForDoctor(req.user.userId);
@@ -10,4 +12,10 @@ async function getAppointment(req, res) {
   res.json({ appointment });
 }
 
-module.exports = { listMyPatients, getAppointment };
+async function submitPostVisitNotes(req, res) {
+  const input = postVisitNotesSchema.parse(req.body);
+  const result = await postVisitService.submitPostVisitNotes(req.user.userId, req.params.appointmentId, input);
+  res.status(201).json(result);
+}
+
+module.exports = { listMyPatients, getAppointment, submitPostVisitNotes };
