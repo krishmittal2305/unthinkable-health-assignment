@@ -15,7 +15,7 @@ function isUniqueConstraintViolation(error) {
 
 async function assertSlotIsOfferable(doctorId, slotStart) {
   const dateOnly = slotStart.toISOString().slice(0, 10);
-  const availability = await availabilityService.getAvailableSlots(doctorId, dateOnly); // 404s if doctor missing
+  const availability = await availabilityService.getAvailableSlots(doctorId, dateOnly);
   const isOfferable = availability.slots.some((slot) => slot.slotStart === slotStart.toISOString());
   if (!isOfferable) {
     throw new AppError(409, "That slot is not currently available. Please pick another.");
@@ -23,15 +23,12 @@ async function assertSlotIsOfferable(doctorId, slotStart) {
 }
 
 async function createHold(patientId, { doctorId, slotStart: slotStartStr }) {
-  const doctor = await doctorService.getDoctorById(doctorId); // 404s if missing
+  const doctor = await doctorService.getDoctorById(doctorId);
   const slotStart = new Date(slotStartStr);
   const slotEnd = new Date(slotStart.getTime() + doctor.slotDurationMins * 60_000);
 
   await assertSlotIsOfferable(doctorId, slotStart);
 
-  // Opportunistically clear a stale hold on this exact slot instead of making
-  // the patient wait for the Step 9 cron sweep — safe because expiresAt < now
-  // is an objective fact, not a race.
   await prisma.slotHold.deleteMany({
     where: { doctorId, slotStart, expiresAt: { lt: new Date() } },
   });
@@ -69,11 +66,6 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
         throw new AppError(410, "This hold has expired. Please select the slot again.");
       }
 
-      // Defense in depth against the narrow race with leaveService.markDoctorOnLeave:
-      // a hold created before leave was marked could still be mid-flight here while
-      // that transaction commits concurrently. Re-checking inside this transaction,
-      // right before the appointment is created, closes almost all of that window
-      // (leaveService's own hold cleanup closes the rest in the common case).
       const slotDateUtc = new Date(
         Date.UTC(hold.slotStart.getUTCFullYear(), hold.slotStart.getUTCMonth(), hold.slotStart.getUTCDate()),
       );
@@ -144,16 +136,8 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
 
   notificationService.triggerBestEffortDelivery();
 
-  // Fire-and-forget: calendar sync is a nice-to-have follow-up, not
-  // something the patient is waiting on in the confirm response, and
-  // createEventForAppointment already never throws (Step 13's contract).
   calendarService.createEventForAppointment(appointment).catch(() => {});
 
-  // Deliberately outside the DB transaction above — an LLM call can take
-  // several seconds and must never hold a transaction (and its row locks)
-  // open. llmService never throws (Step 10's fallback contract), but the
-  // DB write afterward still gets its own guard so a save failure can't
-  // turn an already-successful booking into a 500.
   try {
     const summary = await llmService.generatePreVisitSummary(appointment.symptomForm.symptoms);
     appointment.preVisitSummary = await prisma.preVisitSummary.create({
@@ -173,9 +157,6 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
   return appointment;
 }
 
-// NOTE: nested user data uses `select`, never `include: true` — the User
-// model carries passwordHash, and an unqualified include would serialize it
-// straight into the API response.
 async function listMyAppointments(patientId) {
   return prisma.appointment.findMany({
     where: { patientId },
@@ -189,7 +170,18 @@ async function listMyAppointments(patientId) {
       },
       symptomForm: true,
       preVisitSummary: true,
+      postVisitNote: { include: { prescriptions: true } },
       postVisitSummary: true,
+    },
+    orderBy: { slotStart: "desc" },
+  });
+}
+
+async function listAllForAdmin() {
+  return prisma.appointment.findMany({
+    include: {
+      patient: { select: { id: true, name: true, email: true } },
+      doctorProfile: { select: { specialisation: true, user: { select: { id: true, name: true } } } },
     },
     orderBy: { slotStart: "desc" },
   });
@@ -226,6 +218,41 @@ async function getForDoctor(doctorUserId, appointmentId) {
   }
 
   return appointment;
+}
+
+async function regeneratePreVisitSummary(doctorUserId, appointmentId) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: { symptomForm: true },
+  });
+
+  if (!appointment || appointment.doctorUserId !== doctorUserId) {
+    throw new AppError(404, "Appointment not found");
+  }
+  if (!appointment.symptomForm) {
+    throw new AppError(409, "This appointment has no symptom form to summarize");
+  }
+
+  const summary = await llmService.generatePreVisitSummary(appointment.symptomForm.symptoms);
+
+  return prisma.preVisitSummary.upsert({
+    where: { appointmentId },
+    update: {
+      urgencyLevel: summary.urgencyLevel,
+      chiefComplaint: summary.chiefComplaint,
+      suggestedQuestions: summary.suggestedQuestions,
+      rawLlmResponse: summary.rawResponse,
+      isFallback: summary.isFallback,
+    },
+    create: {
+      appointmentId,
+      urgencyLevel: summary.urgencyLevel,
+      chiefComplaint: summary.chiefComplaint,
+      suggestedQuestions: summary.suggestedQuestions,
+      rawLlmResponse: summary.rawResponse,
+      isFallback: summary.isFallback,
+    },
+  });
 }
 
 async function cancelAppointment(patientId, appointmentId) {
@@ -282,8 +309,10 @@ module.exports = {
   createHold,
   confirmBooking,
   listMyAppointments,
+  listAllForAdmin,
   listForDoctor,
   getForDoctor,
+  regeneratePreVisitSummary,
   cancelAppointment,
   SLOT_HOLD_TTL_MS,
 };

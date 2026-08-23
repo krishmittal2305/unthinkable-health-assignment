@@ -2,9 +2,6 @@ const nodemailer = require("nodemailer");
 
 let transporter;
 
-// Lazily built so a missing/invalid SMTP config doesn't crash the app at
-// startup — it only surfaces as a failed send, which notificationService
-// already handles gracefully (logged, retried, never thrown at the caller).
 function getTransporter() {
   if (!transporter) {
     transporter = nodemailer.createTransport({

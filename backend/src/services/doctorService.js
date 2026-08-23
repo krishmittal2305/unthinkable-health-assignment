@@ -17,8 +17,6 @@ function toPublicDoctor(doctorProfile) {
   };
 }
 
-// Trimmed shape for anonymous/patient-facing search results — no email/phone,
-// no leave-day detail (that's exposed only as slot availability).
 function toSearchResult(doctorProfile) {
   return {
     id: doctorProfile.id,
@@ -36,6 +34,17 @@ async function searchDoctors({ specialisation } = {}) {
   });
 
   return doctorProfiles.map(toSearchResult);
+}
+
+async function getSearchResultById(doctorId) {
+  const doctorProfile = await prisma.doctorProfile.findUnique({
+    where: { id: doctorId },
+    include: { user: true },
+  });
+  if (!doctorProfile) {
+    throw new AppError(404, "Doctor not found");
+  }
+  return toSearchResult(doctorProfile);
 }
 
 async function createDoctor(input) {
@@ -84,7 +93,7 @@ async function getDoctorById(doctorId) {
 }
 
 async function updateDoctorProfile(doctorId, updates) {
-  await getDoctorById(doctorId); // 404s if missing
+  await getDoctorById(doctorId);
 
   const doctorProfile = await prisma.doctorProfile.update({
     where: { id: doctorId },
@@ -118,13 +127,8 @@ async function deleteDoctor(doctorId) {
     );
   }
 
-  // Deleting the User cascades DoctorProfile, LeaveDay, and any (cancelled) appointments.
   await prisma.user.delete({ where: { id: doctorProfile.userId } });
 }
-
-// Leave-marking itself (with its appointment-cancellation / notification
-// side effects) lives in leaveService.markDoctorOnLeave — this module stays
-// focused on doctor profile CRUD.
 
 async function removeLeaveDay(doctorId, leaveDayId) {
   const leaveDay = await prisma.leaveDay.findUnique({ where: { id: leaveDayId } });
@@ -139,6 +143,7 @@ module.exports = {
   toPublicDoctor,
   toSearchResult,
   searchDoctors,
+  getSearchResultById,
   createDoctor,
   listDoctors,
   getDoctorById,

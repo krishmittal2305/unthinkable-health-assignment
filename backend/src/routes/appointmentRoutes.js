@@ -3,8 +3,6 @@ const appointmentController = require("../controllers/appointmentController");
 const { asyncHandler } = require("../middleware/asyncHandler");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
-// Mounted at /api/appointments. Booking is patient-initiated only for now —
-// doctor/admin views over appointments are added in later steps.
 const appointmentRouter = Router();
 
 appointmentRouter.use(requireAuth, requireRole("PATIENT"));

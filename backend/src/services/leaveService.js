@@ -3,15 +3,6 @@ const { prisma } = require("../lib/prisma");
 const notificationService = require("./notificationService");
 const calendarService = require("./calendarService");
 
-// Marks a doctor on leave for a date and resolves every conflict that
-// creates in one transaction:
-//  - any in-flight SlotHold for that day is invalidated (nothing to confirm
-//    on a day the doctor won't be in)
-//  - any BOOKED appointment for that day is moved to CANCELLED_BY_LEAVE
-//  - a NotificationLog row (EMAIL, LEAVE_NOTICE) is queued per affected
-//    patient, delivered by the best-effort trigger right after this
-//    transaction commits (Step 9's cron is the reliable fallback for
-//    anything that attempt misses).
 async function markDoctorOnLeave(doctorId, { date, reason }) {
   let affectedAppointmentIds = [];
 

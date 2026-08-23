@@ -8,6 +8,11 @@ async function searchDoctors(req, res) {
   res.json({ doctors });
 }
 
+async function getDoctor(req, res) {
+  const doctor = await doctorService.getSearchResultById(req.params.doctorId);
+  res.json({ doctor });
+}
+
 async function getAvailability(req, res) {
   const { date } = req.query;
   if (typeof date !== "string") {
@@ -18,4 +23,4 @@ async function getAvailability(req, res) {
   res.json(availability);
 }
 
-module.exports = { searchDoctors, getAvailability };
+module.exports = { searchDoctors, getDoctor, getAvailability };

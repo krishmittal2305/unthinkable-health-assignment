@@ -29,12 +29,18 @@ export function AuthProvider({ children }) {
     return data;
   }
 
+  async function register({ name, email, password, phone }) {
+    const data = await apiFetch("/api/auth/register", { method: "POST", body: { name, email, password, phone } });
+    setAuth(data);
+    return data;
+  }
+
   function logout() {
     setAuth(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user: auth?.user ?? null, token: auth?.token ?? null, login, logout }}>
+    <AuthContext.Provider value={{ user: auth?.user ?? null, token: auth?.token ?? null, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

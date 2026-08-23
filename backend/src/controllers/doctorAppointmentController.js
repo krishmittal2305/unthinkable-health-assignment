@@ -12,10 +12,18 @@ async function getAppointment(req, res) {
   res.json({ appointment });
 }
 
+async function regeneratePreVisitSummary(req, res) {
+  const preVisitSummary = await appointmentService.regeneratePreVisitSummary(
+    req.user.userId,
+    req.params.appointmentId,
+  );
+  res.json({ preVisitSummary });
+}
+
 async function submitPostVisitNotes(req, res) {
   const input = postVisitNotesSchema.parse(req.body);
   const result = await postVisitService.submitPostVisitNotes(req.user.userId, req.params.appointmentId, input);
   res.status(201).json(result);
 }
 
-module.exports = { listMyPatients, getAppointment, submitPostVisitNotes };
+module.exports = { listMyPatients, getAppointment, regeneratePreVisitSummary, submitPostVisitNotes };

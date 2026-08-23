@@ -5,7 +5,6 @@ function notFoundHandler(req, res) {
   res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
 }
 
-// eslint-disable-next-line no-unused-vars
 function errorHandler(err, _req, res, _next) {
   if (err instanceof ZodError) {
     res.status(400).json({ error: "Validation failed", details: err.flatten() });

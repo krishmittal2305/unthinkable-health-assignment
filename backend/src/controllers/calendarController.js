@@ -13,9 +13,6 @@ async function connect(req, res) {
   res.json({ authUrl });
 }
 
-// Hit directly by Google's redirect — no Authorization header, so this route
-// is intentionally public. Identity/authorization for *which doctor* comes
-// from the signed `state` param, verified inside handleOAuthCallback.
 async function callback(req, res) {
   const { code, state, error: oauthError } = req.query;
 

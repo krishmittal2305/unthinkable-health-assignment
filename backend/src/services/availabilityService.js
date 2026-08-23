@@ -5,9 +5,6 @@ const doctorService = require("./doctorService");
 const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// All slot arithmetic is done in UTC, and a "date" is always the UTC calendar
-// day, regardless of the server's local timezone. This keeps slot generation,
-// leave-day matching, and stored appointment times mutually consistent.
 function parseDateOnly(dateStr) {
   if (!DATE_ONLY_RE.test(dateStr)) {
     throw new AppError(400, "date must be in YYYY-MM-DD format");
@@ -47,7 +44,7 @@ function generateCandidateSlots(midnightUtc, dayHours, slotDurationMins) {
 
 async function getAvailableSlots(doctorId, dateStr) {
   const midnightUtc = parseDateOnly(dateStr);
-  const doctor = await doctorService.getDoctorById(doctorId); // 404s if missing
+  const doctor = await doctorService.getDoctorById(doctorId);
 
   const isOnLeave = doctor.leaveDays?.some(
     (leaveDay) => new Date(leaveDay.date).getTime() === midnightUtc.getTime(),

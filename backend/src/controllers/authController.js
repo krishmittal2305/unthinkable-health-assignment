@@ -29,8 +29,6 @@ async function me(req, res) {
   res.json({ user: authService.toPublicUser(user) });
 }
 
-// Admin-only: create a DOCTOR or ADMIN account. Patients self-register; doctors/admins
-// never self-register (per assignment spec), so this is the only way those accounts get made.
 async function adminCreateUser(req, res) {
   const input = adminCreateUserSchema.parse(req.body);
 

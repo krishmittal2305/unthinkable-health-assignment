@@ -1,6 +1,5 @@
 const { z } = require("zod");
 
-// workingHours: { mon: ["09:00","17:00"], tue: [...], ... } — missing/absent day = not working.
 const dayHoursSchema = z.tuple([
   z.string().regex(/^\d{2}:\d{2}$/, "Expected HH:mm"),
   z.string().regex(/^\d{2}:\d{2}$/, "Expected HH:mm"),

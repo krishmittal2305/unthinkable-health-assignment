@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const ROLE_HOME = {
@@ -47,6 +47,9 @@ export default function LoginPage() {
           {submitting ? "Logging in..." : "Log in"}
         </button>
       </form>
+      <p className="muted" style={{ marginTop: "12px" }}>
+        New patient? <Link to="/register">Create an account</Link>
+      </p>
     </div>
   );
 }

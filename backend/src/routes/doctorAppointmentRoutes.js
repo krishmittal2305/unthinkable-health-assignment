@@ -3,15 +3,16 @@ const doctorAppointmentController = require("../controllers/doctorAppointmentCon
 const { asyncHandler } = require("../middleware/asyncHandler");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
-// Mounted at /api/doctor/appointments — doctor-only. Doctors see the AI
-// pre-visit summary here before the visit and submit post-visit notes +
-// prescriptions after.
 const doctorAppointmentRouter = Router();
 
 doctorAppointmentRouter.use(requireAuth, requireRole("DOCTOR"));
 
 doctorAppointmentRouter.get("/", asyncHandler(doctorAppointmentController.listMyPatients));
 doctorAppointmentRouter.get("/:appointmentId", asyncHandler(doctorAppointmentController.getAppointment));
+doctorAppointmentRouter.post(
+  "/:appointmentId/regenerate-pre-visit-summary",
+  asyncHandler(doctorAppointmentController.regeneratePreVisitSummary),
+);
 doctorAppointmentRouter.post(
   "/:appointmentId/post-visit",
   asyncHandler(doctorAppointmentController.submitPostVisitNotes),

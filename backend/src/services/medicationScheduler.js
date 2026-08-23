@@ -1,7 +1,4 @@
-// Translates a free-text prescription frequency into concrete reminder
-// timestamps. This is a deliberately simple heuristic (fixed clock times per
-// day, or a fixed hourly interval) — good enough for the assignment's scope,
-// documented as a known simplification rather than hidden.
+
 
 function parseFrequency(frequency) {
   const f = frequency.toLowerCase();
@@ -21,11 +18,9 @@ function parseFrequency(frequency) {
   if (/\bbid\b|twice/.test(f)) return { type: "daily", timesPerDay: 2 };
   if (/\bod\b|once/.test(f)) return { type: "daily", timesPerDay: 1 };
 
-  return { type: "daily", timesPerDay: 1 }; // safe fallback: better one reminder than none
+  return { type: "daily", timesPerDay: 1 };
 }
 
-// Fixed clock times (UTC hour-of-day) for common daily dose counts, spread
-// across waking hours.
 const DAILY_HOUR_SCHEDULES = {
   1: [9],
   2: [9, 21],
@@ -52,7 +47,7 @@ function generateReminderTimes(startFrom, durationDays, schedule) {
       const d = new Date(startFrom);
       d.setUTCDate(d.getUTCDate() + day);
       d.setUTCHours(hour, 0, 0, 0);
-      if (d > startFrom) times.push(d); // don't schedule a dose time already past today
+      if (d > startFrom) times.push(d);
     }
   }
   return times;

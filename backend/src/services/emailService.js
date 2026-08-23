@@ -2,10 +2,6 @@ function formatSlot(isoString) {
   return new Date(isoString).toUTCString();
 }
 
-// Each renderer gets (payload, recipientName) and returns { subject, text }.
-// payload is whatever was stored on the NotificationLog row; recipientName
-// comes from the recipient's own User record at delivery time, so callers
-// never need to duplicate "who is this email addressed to" into payload.
 const TEMPLATES = {
   BOOKING_CONFIRMATION: (payload, recipientName) => ({
     subject: "Appointment confirmed",

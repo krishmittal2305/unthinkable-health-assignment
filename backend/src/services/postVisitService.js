@@ -28,9 +28,6 @@ async function submitPostVisitNotes(doctorUserId, appointmentId, { clinicalNotes
     return { postVisitNote: note };
   });
 
-  // Reminder scheduling and the LLM summary are both best-effort follow-ups —
-  // the visit itself is already recorded and the appointment already marked
-  // COMPLETED regardless of what happens next.
   try {
     const now = new Date();
     for (const prescription of postVisitNote.prescriptions) {

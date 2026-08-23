@@ -1,12 +1,8 @@
 const { prisma } = require("../lib/prisma");
 const notificationService = require("../services/notificationService");
 
-const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000; // remind once an appointment is within 24h
+const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-// Finds BOOKED appointments starting within the next 24h that haven't been
-// reminded yet, queues an APPOINTMENT_REMINDER for both patient and doctor,
-// and marks reminderSentAt so re-running this job never double-sends —
-// correct regardless of how often the cron actually fires.
 async function runAppointmentReminderDispatch() {
   const now = new Date();
   const windowEnd = new Date(now.getTime() + REMINDER_WINDOW_MS);

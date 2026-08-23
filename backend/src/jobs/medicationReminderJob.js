@@ -1,10 +1,6 @@
 const { prisma } = require("../lib/prisma");
 const notificationService = require("../services/notificationService");
 
-// Consumer half of medication reminders — Step 12 is the producer that
-// creates MedicationReminder rows from a prescription's frequency; until
-// that exists this simply finds nothing to do, which is correct behavior,
-// not a stub.
 async function runMedicationReminderDispatch() {
   const dueReminders = await prisma.medicationReminder.findMany({
     where: { sent: false, remindAt: { lte: new Date() } },

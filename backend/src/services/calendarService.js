@@ -8,11 +8,6 @@ const { prisma } = require("../lib/prisma");
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 const STATE_PURPOSE = "google_oauth_state";
 
-// The OAuth callback is hit directly by Google's redirect (a plain browser
-// navigation, no Authorization header available), so "which doctor is
-// connecting" has to travel through the `state` param itself rather than a
-// session. Signed + short-lived + purpose-tagged so it can't be confused
-// with (or forged from) a normal auth JWT.
 function getAuthUrl(doctorId) {
   if (!isGoogleConfigured()) {
     throw new AppError(503, "Google Calendar integration is not configured on this server");
@@ -23,7 +18,7 @@ function getAuthUrl(doctorId) {
 
   return client.generateAuthUrl({
     access_type: "offline",
-    prompt: "consent", // force a refresh_token even if the doctor connected before
+    prompt: "consent",
     scope: SCOPES,
     state,
   });
@@ -73,9 +68,6 @@ async function handleOAuthCallback(code, state) {
   return doctorId;
 }
 
-// Returns null (never throws) when the doctor hasn't connected a calendar,
-// or Google isn't configured server-side — every caller treats that as
-// "skip calendar sync for this appointment", not an error.
 async function getClientForDoctor(doctorId) {
   if (!isGoogleConfigured()) return null;
 
@@ -89,8 +81,6 @@ async function getClientForDoctor(doctorId) {
     expiry_date: tokenRow.expiryDate.getTime(),
   });
 
-  // googleapis auto-refreshes the access token using the refresh_token when
-  // it's expired; persist the refreshed token back so future calls reuse it.
   client.on("tokens", (newTokens) => {
     prisma.googleCalendarToken
       .update({
@@ -107,8 +97,6 @@ async function getClientForDoctor(doctorId) {
   return client;
 }
 
-// Best-effort, never throws — booking must succeed whether or not the
-// doctor has connected Google Calendar, or the API call happens to fail.
 async function createEventForAppointment(appointment) {
   try {
     const client = await getClientForDoctor(appointment.doctorId);
@@ -130,7 +118,7 @@ async function createEventForAppointment(appointment) {
     const calendar = google.calendar({ version: "v3", auth: client });
     const event = await calendar.events.insert({
       calendarId: "primary",
-      sendUpdates: "all", // emails the patient an invite — no patient-side OAuth needed
+      sendUpdates: "all",
       requestBody: {
         summary: `Appointment: ${doctorProfile.user.name} & ${patient.name}`,
         description: "Booked via Healthcare Appointment Manager",
@@ -148,18 +136,15 @@ async function createEventForAppointment(appointment) {
   }
 }
 
-// Best-effort, never throws — cancellation must succeed regardless of
-// calendar sync outcome.
 async function deleteEventForAppointment(appointmentId) {
   try {
     const calendarEvent = await prisma.calendarEvent.findUnique({ where: { appointmentId } });
-    if (!calendarEvent) return; // no linked event — nothing to do (e.g. doctor never connected)
+    if (!calendarEvent) return;
 
     const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
     const client = await getClientForDoctor(appointment.doctorId);
     if (!client) {
-      // Token missing/revoked since the event was created. Nothing we can
-      // delete remotely — drop our local link so this doesn't retry forever.
+
       await prisma.calendarEvent.delete({ where: { appointmentId } });
       return;
     }

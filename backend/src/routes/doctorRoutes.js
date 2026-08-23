@@ -3,8 +3,6 @@ const doctorController = require("../controllers/doctorController");
 const { asyncHandler } = require("../middleware/asyncHandler");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
-// Mounted at /api/admin/doctors — every route here is admin-only.
-// (Public doctor search for patients is a separate route added in Step 5.)
 const adminDoctorRouter = Router();
 
 adminDoctorRouter.use(requireAuth, requireRole("ADMIN"));

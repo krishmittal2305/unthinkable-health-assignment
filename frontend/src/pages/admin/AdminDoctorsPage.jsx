@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 
@@ -13,14 +13,85 @@ const EMPTY_FORM = {
   workingHours: DEFAULT_WORKING_HOURS,
 };
 
+function LeaveDayManager({ doctor, token, onChanged }) {
+  const [date, setDate] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleAdd(event) {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const result = await apiFetch(`/api/admin/doctors/${doctor.id}/leave-days`, {
+        method: "POST",
+        token,
+        body: { date, reason: reason || undefined },
+      });
+      if (result.cancelledAppointmentCount > 0) {
+        alert(`${result.cancelledAppointmentCount} booked appointment(s) on this date were cancelled and the affected patients notified.`);
+      }
+      setDate("");
+      setReason("");
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRemove(leaveDayId) {
+    try {
+      await apiFetch(`/api/admin/doctors/${doctor.id}/leave-days/${leaveDayId}`, { method: "DELETE", token });
+      await onChanged();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  return (
+    <div style={{ padding: "12px 0" }}>
+      <strong>Leave days for {doctor.user.name}</strong>
+      <ul style={{ margin: "8px 0" }}>
+        {doctor.leaveDays?.length === 0 && <li className="muted">No leave days marked.</li>}
+        {doctor.leaveDays?.map((leaveDay) => (
+          <li key={leaveDay.id}>
+            {new Date(leaveDay.date).toLocaleDateString()} {leaveDay.reason ? `— ${leaveDay.reason}` : ""}{" "}
+            <button className="button-danger" onClick={() => handleRemove(leaveDay.id)}>
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={handleAdd} style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+        <label>
+          Date
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        </label>
+        <label>
+          Reason (optional)
+          <input value={reason} onChange={(e) => setReason(e.target.value)} />
+        </label>
+        <button type="submit" disabled={submitting}>
+          {submitting ? "Adding..." : "Mark on leave"}
+        </button>
+      </form>
+      {error && <p className="form-error">{error}</p>}
+    </div>
+  );
+}
+
 export default function AdminDoctorsPage() {
-  const { token, user, logout } = useAuth();
+  const { token } = useAuth();
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [expandedDoctorId, setExpandedDoctorId] = useState(null);
 
   async function loadDoctors() {
     setLoading(true);
@@ -37,7 +108,7 @@ export default function AdminDoctorsPage() {
 
   useEffect(() => {
     loadDoctors();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   async function handleCreate(event) {
@@ -88,16 +159,8 @@ export default function AdminDoctorsPage() {
   }
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <h1>Doctor management</h1>
-        <div>
-          <span className="muted">{user?.email}</span>
-          <button onClick={logout} className="button-secondary">
-            Log out
-          </button>
-        </div>
-      </header>
+    <div>
+      <h1>Doctor management</h1>
 
       <section className="card">
         <h2>Add doctor</h2>
@@ -176,18 +239,33 @@ export default function AdminDoctorsPage() {
             </thead>
             <tbody>
               {doctors.map((doctor) => (
-                <tr key={doctor.id}>
-                  <td>{doctor.user.name}</td>
-                  <td>{doctor.user.email}</td>
-                  <td>{doctor.specialisation}</td>
-                  <td>{doctor.slotDurationMins}</td>
-                  <td>{doctor.leaveDays?.length ?? 0}</td>
-                  <td>
-                    <button onClick={() => handleDelete(doctor.id)} className="button-danger">
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                <Fragment key={doctor.id}>
+                  <tr>
+                    <td>{doctor.user.name}</td>
+                    <td>{doctor.user.email}</td>
+                    <td>{doctor.specialisation}</td>
+                    <td>{doctor.slotDurationMins}</td>
+                    <td>{doctor.leaveDays?.length ?? 0}</td>
+                    <td style={{ display: "flex", gap: "6px" }}>
+                      <button
+                        className="button-secondary"
+                        onClick={() => setExpandedDoctorId(expandedDoctorId === doctor.id ? null : doctor.id)}
+                      >
+                        {expandedDoctorId === doctor.id ? "Hide leave" : "Manage leave"}
+                      </button>
+                      <button onClick={() => handleDelete(doctor.id)} className="button-danger">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedDoctorId === doctor.id && (
+                    <tr>
+                      <td colSpan={6}>
+                        <LeaveDayManager doctor={doctor} token={token} onChanged={loadDoctors} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
               {doctors.length === 0 && (
                 <tr>

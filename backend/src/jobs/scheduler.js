@@ -4,9 +4,6 @@ const { runSlotHoldCleanup } = require("./slotHoldCleanupJob");
 const { runAppointmentReminderDispatch } = require("./appointmentReminderJob");
 const { runMedicationReminderDispatch } = require("./medicationReminderJob");
 
-// Wraps a job so one throwing exception can't kill node-cron's internal
-// scheduler loop or take down the process — matches the "system should not
-// break" requirement that already governs LLM/email failure handling.
 function safeJob(name, fn) {
   return async () => {
     try {

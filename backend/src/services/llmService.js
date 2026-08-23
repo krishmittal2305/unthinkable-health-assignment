@@ -6,9 +6,6 @@ const LLM_TIMEOUT_MS = 15_000;
 let client;
 let clientInitAttempted = false;
 
-// Built once, lazily, and only if fully configured — an unconfigured or
-// misconfigured Azure OpenAI setup must never crash the app, it just means
-// every call falls back immediately (see the callers below).
 function getClient() {
   if (clientInitAttempted) return client;
   clientInitAttempted = true;
@@ -25,7 +22,7 @@ function getClient() {
     deployment,
     apiVersion,
     timeout: LLM_TIMEOUT_MS,
-    maxRetries: 0, // one attempt only — our own fallback is the retry strategy, not the SDK's backoff
+    maxRetries: 2,
   });
   return client;
 }
@@ -68,7 +65,7 @@ const PRE_VISIT_SYSTEM_PROMPT = [
 function preVisitFallback(symptoms) {
   return {
     isFallback: true,
-    urgencyLevel: "MEDIUM", // safe default: never silently under-triage when the LLM is unavailable
+    urgencyLevel: "MEDIUM",
     chiefComplaint: symptoms.length > 200 ? `${symptoms.slice(0, 200)}…` : symptoms,
     suggestedQuestions: [
       "Can you describe your symptoms in more detail?",
@@ -79,9 +76,6 @@ function preVisitFallback(symptoms) {
   };
 }
 
-// Prompt text matches the assignment brief exactly: "Analyse these symptoms
-// and return: urgency level (Low / Medium / High), chief complaint, and
-// three suggested questions for the doctor. Symptoms: <symptoms>"
 async function generatePreVisitSummary(symptoms) {
   const userPrompt = `Analyse these symptoms and return: urgency level (Low / Medium / High), chief complaint, and three suggested questions for the doctor. Symptoms: ${symptoms}`;
 
@@ -123,9 +117,6 @@ function postVisitFallback(notes) {
   };
 }
 
-// Prompt text matches the assignment brief exactly: "Convert these clinical
-// notes into a patient-friendly summary with medication schedule and
-// follow-up steps: <notes>"
 async function generatePostVisitSummary(notes) {
   const userPrompt = `Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: ${notes}`;
 

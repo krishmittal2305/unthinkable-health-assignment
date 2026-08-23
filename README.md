@@ -4,9 +4,6 @@ A clinic appointment platform with separate portals for patients, doctors, and a
 double-booking prevention, AI-generated pre-visit and post-visit summaries (Azure OpenAI), email
 notifications, and Google Calendar sync.
 
-> **Status:** work in progress. This README will be filled in as each part of the system is built
-> (see `docs/system-design.md` and the setup instructions below, added in later steps).
-
 ## Stack
 
 - **Backend:** Node.js, Express, JavaScript, Prisma ORM, PostgreSQL
@@ -21,42 +18,88 @@ notifications, and Google Calendar sync.
 ```
 /backend    Express API, Prisma schema/migrations, background jobs, LLM/email/calendar services
 /frontend   React + Vite app (patient, doctor, admin portals)
-/docs       System design write-up, DB schema notes, API docs, LLM prompts
+/docs       Documentation (see below)
 ```
+
+## Documentation
+
+- [docs/system-design.md](docs/system-design.md) — double-booking prevention, leave conflict handling,
+  slot hold mechanism, notification failure handling (required write-up, ≤800 words)
+- [docs/db-schema.md](docs/db-schema.md) — database schema, model-by-model
+- [docs/api-docs.md](docs/api-docs.md) — every API endpoint, method, auth, body shape
+- [docs/llm-prompts.md](docs/llm-prompts.md) — exact LLM prompts and fallback behavior
+- [docs/google-calendar-setup.md](docs/google-calendar-setup.md) — Google Cloud / OAuth setup steps
 
 ## Setup
 
-Full setup instructions (LLM/email/calendar env vars, Google Calendar OAuth setup) will be filled in as
-those pieces are built. Database setup below is already complete and working.
+### 1. Database (PostgreSQL)
 
-### Database (PostgreSQL)
+Install PostgreSQL locally (or use any hosted Postgres — Neon/Supabase/Render all have free tiers) and
+create a database, e.g.:
 
-This dev machine has PostgreSQL 17 installed locally as a Windows service (`postgresql-x64-17`), with:
-- superuser: `postgres` / password: `postgres` (local dev only — never use this in production)
-- database: `healthcare_appointments`
+```sql
+CREATE DATABASE healthcare_appointments;
+```
 
-If setting up on a different machine, install PostgreSQL, create a database, and point `DATABASE_URL` in
-`backend/.env` at it — no code changes needed.
-
-### Backend
+### 2. Backend
 
 ```bash
 cd backend
 npm install
-cp .env.example .env          # already pre-filled with local DB creds on this machine
-npm run prisma:migrate         # applies backend/prisma/migrations
-npm run prisma:seed            # creates admin@clinic.test / ChangeMe123!
-npm run dev                    # http://localhost:4000/health
+cp .env.example .env
 ```
 
-### Frontend
+Fill in `backend/.env`:
+- `DATABASE_URL` — your Postgres connection string
+- `JWT_SECRET` — any long random string
+- `AZURE_OPENAI_*` — optional; without these, pre/post-visit summaries fall back to safe default text
+  instead of failing (see `docs/llm-prompts.md`)
+- `SMTP_*` / `EMAIL_FROM` — optional; without these, emails are logged as `FAILED` in `NotificationLog`
+  and retried, but nothing crashes
+- `GOOGLE_*` — optional; see `docs/google-calendar-setup.md`. Without these, calendar sync is skipped
+- `FRONTEND_URL` — used for CORS and for redirect targets (Google OAuth callback, etc.)
+
+Then:
+
+```bash
+npm run prisma:migrate   # applies backend/prisma/migrations
+npm run prisma:seed      # creates the initial admin account (see SEED_ADMIN_EMAIL/PASSWORD in .env.example)
+npm run dev               # http://localhost:4000/health
+```
+
+### 3. Frontend
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env
-npm run dev                    # http://localhost:5173 (redirects to /login)
+cp .env.example .env      # VITE_API_BASE_URL, defaults to http://localhost:4000
+npm run dev                # http://localhost:5173
 ```
 
-Log in at `/login` with the seeded admin (`admin@clinic.test` / `ChangeMe123!`) to reach the doctor
-management page at `/admin/doctors`.
+### 4. First login
+
+The seed script creates one admin account: `admin@clinic.test` / `ChangeMe123!` (override via
+`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` before seeding). Log in at `/login`:
+
+- **Admin** → `/admin/doctors`: create doctor accounts (specialisation, working hours, slot duration),
+  manage leave days, view all appointments at `/admin/appointments`.
+- **Doctor** → `/doctor`: created by admin, not self-registered. View schedule, see AI pre-visit
+  summaries, submit post-visit notes + prescriptions.
+- **Patient** → `/patient`: self-register at `/register`. Search doctors, book a slot, fill a symptom
+  form, view appointments and AI summaries.
+
+## Background jobs
+
+`npm run dev`/`npm start` also starts an in-process `node-cron` scheduler (`backend/src/jobs/scheduler.js`):
+slot-hold cleanup (1 min), notification retry sweep (2 min, exponential backoff), medication reminder
+dispatch (5 min), appointment reminder dispatch (15 min). No separate worker process needed.
+
+## Known scope limitations
+
+- No dedicated "reschedule" endpoint — reschedule is cancel-then-rebook, which correctly frees the old
+  slot and syncs the calendar (delete old event, create new one on the new booking).
+- Medication reminder timing is a simple heuristic (fixed daily clock-times or a fixed hourly interval
+  parsed from the prescription's free-text frequency), not a full scheduling DSL — documented in
+  `docs/db-schema.md`.
+- The rate limiter on auth endpoints is in-memory, single-process — fine for this deployment target, not
+  suitable as-is for a multi-instance/horizontally-scaled deployment.
