@@ -29,4 +29,5 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-
+#plans
+emailplan.md
