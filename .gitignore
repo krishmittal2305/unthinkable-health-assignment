@@ -12,6 +12,9 @@ build/
 .next/
 out/
 
+# other
+host.md
+
 # Prisma
 backend/prisma/dev.db
 backend/prisma/dev.db-journal
