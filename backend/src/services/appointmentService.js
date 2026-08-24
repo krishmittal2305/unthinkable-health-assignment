@@ -85,7 +85,10 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
         throw new AppError(404, "Doctor not found");
       }
 
-      const patient = await tx.user.findUnique({ where: { id: patientId }, select: { name: true } });
+      const patient = await tx.user.findUnique({
+        where: { id: patientId },
+        select: { name: true, email: true, phone: true },
+      });
 
       const appointment = await tx.appointment.create({
         data: {
@@ -104,26 +107,8 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
 
       await tx.slotHold.delete({ where: { id: holdId } });
 
-      const notificationPayload = {
-        appointmentId: appointment.id,
-        doctorName: doctorProfile.user.name,
-        patientName: patient?.name,
-        specialisation: doctorProfile.specialisation,
-        slotStart: appointment.slotStart.toISOString(),
-      };
-      await notificationService.createNotification(
-        { channel: "EMAIL", type: "BOOKING_CONFIRMATION", recipientId: patientId, payload: notificationPayload },
-        tx,
-      );
-      await notificationService.createNotification(
-        {
-          channel: "EMAIL",
-          type: "BOOKING_CONFIRMATION",
-          recipientId: doctorProfile.user.id,
-          payload: notificationPayload,
-        },
-        tx,
-      );
+      appointment.doctorProfile = doctorProfile;
+      appointment.patient = patient;
 
       return appointment;
     });
@@ -134,13 +119,12 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
     throw error;
   }
 
-  notificationService.triggerBestEffortDelivery();
-
   calendarService.createEventForAppointment(appointment).catch(() => {});
 
+  let preVisitSummary = null;
   try {
     const summary = await llmService.generatePreVisitSummary(appointment.symptomForm.symptoms);
-    appointment.preVisitSummary = await prisma.preVisitSummary.create({
+    preVisitSummary = await prisma.preVisitSummary.create({
       data: {
         appointmentId: appointment.id,
         urgencyLevel: summary.urgencyLevel,
@@ -150,9 +134,46 @@ async function confirmBooking(patientId, { holdId, symptoms, durationDays, sever
         isFallback: summary.isFallback,
       },
     });
+    appointment.preVisitSummary = preVisitSummary;
   } catch (error) {
     console.error("Failed to save pre-visit summary (booking still succeeded):", error);
   }
+
+  const { doctorProfile, patient, symptomForm } = appointment;
+
+  await notificationService.createNotification({
+    channel: "EMAIL",
+    type: "BOOKING_CONFIRMATION",
+    recipientId: patientId,
+    payload: {
+      appointmentId: appointment.id,
+      doctorName: doctorProfile.user.name,
+      specialisation: doctorProfile.specialisation,
+      slotStart: appointment.slotStart.toISOString(),
+      symptoms: symptomForm.symptoms,
+      severity: symptomForm.severity,
+      durationDays: symptomForm.durationDays,
+    },
+  });
+  await notificationService.createNotification({
+    channel: "EMAIL",
+    type: "DOCTOR_NEW_BOOKING",
+    recipientId: doctorProfile.user.id,
+    payload: {
+      appointmentId: appointment.id,
+      patientName: patient?.name,
+      patientEmail: patient?.email,
+      patientPhone: patient?.phone,
+      slotStart: appointment.slotStart.toISOString(),
+      symptoms: symptomForm.symptoms,
+      severity: symptomForm.severity,
+      durationDays: symptomForm.durationDays,
+      urgencyLevel: preVisitSummary?.urgencyLevel,
+      chiefComplaint: preVisitSummary?.chiefComplaint,
+      suggestedQuestions: preVisitSummary?.suggestedQuestions,
+    },
+  });
+  notificationService.triggerBestEffortDelivery();
 
   return appointment;
 }

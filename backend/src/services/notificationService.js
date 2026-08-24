@@ -27,9 +27,9 @@ async function deliverNotification(notificationId) {
       throw new Error(`Notification recipient ${notification.recipientId} no longer exists`);
     }
 
-    const { subject, text } = renderEmail(notification.type, notification.payload, recipient.name);
+    const { subject, text, html } = renderEmail(notification.type, notification.payload, recipient.name);
 
-    await sendMail({ to: recipient.email, subject: notification.subject ?? subject, text });
+    await sendMail({ to: recipient.email, subject: notification.subject ?? subject, text, html });
 
     await prisma.notificationLog.update({
       where: { id: notification.id },

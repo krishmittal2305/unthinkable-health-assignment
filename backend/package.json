@@ -23,7 +23,6 @@
     "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.15",
     "openai": "^4.63.0",
     "zod": "^3.23.8"
   },

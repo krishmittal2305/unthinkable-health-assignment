@@ -49,11 +49,11 @@ reminders) is first written to a `NotificationLog` row with `status: PENDING` â€
 durable before any network call happens, including inside the same transaction as the state change that
 triggered it where that matters (e.g. leave cancellations). Actually sending is decoupled: a best-effort
 attempt fires immediately after the triggering request completes (fire-and-forget, so a slow or failing
-SMTP server never delays or breaks the booking/cancellation response), and a cron job sweeps
+email provider never delays or breaks the booking/cancellation response), and a cron job sweeps
 `PENDING`/`FAILED` rows every 2 minutes as the reliable fallback. Failed sends are retried with
 exponential backoff (1/2/4/8/16 minutes) up to 5 attempts, recording the real error message each time,
-so a transient SMTP outage self-heals without spamming retries or silently dropping the notification.
-This was verified by deliberately breaking the SMTP credentials mid-session: bookings and cancellations
+so a transient outage at the email provider self-heals without spamming retries or silently dropping the
+notification. This was verified by deliberately breaking the email API credentials mid-session: bookings and cancellations
 still returned success, and the failed notifications were correctly logged with their retry count and
 error rather than crashing anything.
 

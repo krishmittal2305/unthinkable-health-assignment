@@ -10,7 +10,7 @@ notifications, and Google Calendar sync.
 - **Backend:** Node.js, Express, JavaScript, Prisma ORM, PostgreSQL
 - **Frontend:** React, Vite, JavaScript
 - **LLM:** Azure OpenAI (pre-visit and post-visit summaries)
-- **Email:** Nodemailer (Gmail/SMTP)
+- **Email:** Resend (transactional email HTTP API)
 - **Calendar:** Google Calendar API v3 (OAuth 2.0)
 - **Background jobs:** node-cron
 
@@ -55,8 +55,8 @@ Fill in `backend/.env`:
 - `JWT_SECRET` — any long random string
 - `AZURE_OPENAI_*` — optional; without these, pre/post-visit summaries fall back to safe default text
   instead of failing (see `docs/llm-prompts.md`)
-- `SMTP_*` / `EMAIL_FROM` — optional; without these, emails are logged as `FAILED` in `NotificationLog`
-  and retried, but nothing crashes
+- `RESEND_API_KEY` / `EMAIL_FROM` — optional; without these, emails are logged as `FAILED` in
+  `NotificationLog` and retried, but nothing crashes (see `emailplan.md` for Resend setup)
 - `GOOGLE_*` — optional; see `docs/google-calendar-setup.md`. Without these, calendar sync is skipped
 - `FRONTEND_URL` — used for CORS and for redirect targets (Google OAuth callback, etc.)
 

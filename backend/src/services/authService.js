@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const { AppError } = require("../lib/errors");
 const { signToken } = require("../lib/jwt");
 const { prisma } = require("../lib/prisma");
+const notificationService = require("./notificationService");
 
 const SALT_ROUNDS = 10;
 
@@ -22,6 +23,14 @@ async function createUser(input) {
       role: input.role,
     },
   });
+
+  await notificationService.createNotification({
+    channel: "EMAIL",
+    type: "ACCOUNT_CREATED",
+    recipientId: user.id,
+    payload: { role: user.role },
+  });
+  notificationService.triggerBestEffortDelivery();
 
   return user;
 }

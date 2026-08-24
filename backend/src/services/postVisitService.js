@@ -1,6 +1,7 @@
 const { AppError } = require("../lib/errors");
 const { prisma } = require("../lib/prisma");
 const llmService = require("./llmService");
+const notificationService = require("./notificationService");
 const { buildReminderSchedule } = require("./medicationScheduler");
 
 async function submitPostVisitNotes(doctorUserId, appointmentId, { clinicalNotes, prescriptions }) {
@@ -62,6 +63,20 @@ async function submitPostVisitNotes(doctorUserId, appointmentId, { clinicalNotes
   } catch (error) {
     console.error("Failed to save post-visit summary (post-visit note still saved):", error);
   }
+
+  await notificationService.createNotification({
+    channel: "EMAIL",
+    type: "POST_VISIT_SUMMARY",
+    recipientId: appointment.patientId,
+    payload: {
+      appointmentId,
+      summaryText: postVisitSummary?.summaryText ?? postVisitNote.clinicalNotes,
+      isFallback: postVisitSummary?.isFallback ?? true,
+      medicationSchedule: postVisitSummary?.medicationPlan ?? null,
+      followUpSteps: postVisitSummary?.followUpSteps ?? [],
+    },
+  });
+  notificationService.triggerBestEffortDelivery();
 
   return { postVisitNote, postVisitSummary };
 }

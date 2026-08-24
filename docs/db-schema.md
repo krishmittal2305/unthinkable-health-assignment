@@ -74,7 +74,7 @@ parser — fixed daily clock-times or a fixed hourly interval) and dispatched by
 
 **NotificationLog** — `channel (EMAIL|CALENDAR), type, recipientId, subject?, payload (JSON), status
 (PENDING|SENT|FAILED), retryCount, lastError?`. Every outbound email is logged here *before* it's
-attempted, so intent survives a crash or SMTP outage. A cron job retries `PENDING`/`FAILED` rows with
+attempted, so intent survives a crash or an outage at the email provider. A cron job retries `PENDING`/`FAILED` rows with
 exponential backoff up to `MAX_RETRIES`.
 
 **GoogleCalendarToken** — one-to-one with `DoctorProfile`. `accessToken, refreshToken, expiryDate`.
