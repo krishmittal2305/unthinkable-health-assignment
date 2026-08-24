@@ -44,21 +44,27 @@ action's blast radius is visible immediately, not discovered later.
 
 ## Notification failure handling
 
-Every outbound notification (booking confirmation, cancellation, leave notice, appointment/medication
-reminders) is first written to a `NotificationLog` row with `status: PENDING` — the intent to notify is
-durable before any network call happens, including inside the same transaction as the state change that
-triggered it where that matters (e.g. leave cancellations). Actually sending is decoupled: a best-effort
-attempt fires immediately after the triggering request completes (fire-and-forget, so a slow or failing
-email provider never delays or breaks the booking/cancellation response), and a cron job sweeps
-`PENDING`/`FAILED` rows every 2 minutes as the reliable fallback. Failed sends are retried with
-exponential backoff (1/2/4/8/16 minutes) up to 5 attempts, recording the real error message each time,
-so a transient outage at the email provider self-heals without spamming retries or silently dropping the
-notification. This was verified by deliberately breaking the email API credentials mid-session: bookings and cancellations
-still returned success, and the failed notifications were correctly logged with their retry count and
-error rather than crashing anything.
+Every outbound notification — account creation, booking confirmation, a separate new-booking notice to
+the doctor, post-visit summary, cancellation, leave notice, and appointment/medication reminders — is
+first written to a `NotificationLog` row with `status: PENDING`, so the intent to notify is durable
+before any network call happens (inside the same transaction as the triggering state change where that
+matters, e.g. leave cancellations). Actual delivery is decoupled: a best-effort attempt fires immediately
+after the triggering request completes (fire-and-forget, so a slow or failing email API never delays or
+breaks the booking/cancellation response), and a cron job sweeps `PENDING`/`FAILED` rows every 2 minutes
+as the reliable fallback. Failed sends retry with exponential backoff (1/2/4/8/16 minutes) up to 5
+attempts, recording the real error each time, so a transient outage self-heals without spamming retries
+or silently dropping the notification.
+
+Email itself is sent via Resend's HTTP API rather than SMTP: Render's free Web Services block outbound
+SMTP ports entirely, so an SMTP-based mailer cannot reach any provider once deployed there. Resend's API
+runs over HTTPS, which isn't blocked, and the `sendMail` interface stayed identical when swapping
+transports, so the retry/logging layer above needed no changes.
+
+This was verified by deliberately breaking the email API credentials mid-session: bookings and
+cancellations still returned success, and the failed notifications were correctly logged with their retry
+count and error rather than crashing anything.
 
 The same "log the intent, then best-effort deliver, never let it block the caller" pattern is reused for
-the LLM summaries (Azure OpenAI calls have a bounded timeout and a labeled fallback on any failure) and
-Google Calendar sync (missing/revoked doctor tokens simply skip the calendar step) — a deliberate
-consistency across every external dependency in the system, so failure in any one of them degrades that
-feature only, never the core booking flow.
+the LLM summaries (bounded timeout, labeled fallback on any failure) and Google Calendar sync
+(missing/revoked doctor tokens simply skip the calendar step) — a deliberate consistency across every
+external dependency, so failure in any one degrades that feature only, never the core booking flow.
