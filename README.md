@@ -56,7 +56,7 @@ Fill in `backend/.env`:
 - `AZURE_OPENAI_*` — optional; without these, pre/post-visit summaries fall back to safe default text
   instead of failing (see `docs/llm-prompts.md`)
 - `RESEND_API_KEY` / `EMAIL_FROM` — optional; without these, emails are logged as `FAILED` in
-  `NotificationLog` and retried, but nothing crashes (see `emailplan.md` for Resend setup)
+  `NotificationLog` and retried, but nothing crashes (see **Email service** below)
 - `GOOGLE_*` — optional; see `docs/google-calendar-setup.md`. Without these, calendar sync is skipped
 - `FRONTEND_URL` — used for CORS and for redirect targets (Google OAuth callback, etc.)
 
@@ -104,6 +104,93 @@ Log in at `/login`:
 slot-hold cleanup (1 min), notification retry sweep (2 min, exponential backoff), medication reminder
 dispatch (5 min), appointment reminder dispatch (15 min). No separate worker process needed.
 
+## API overview
+
+Full detail (every endpoint, auth requirement, body shape) is in
+[docs/api-docs.md](docs/api-docs.md). Summary of the route groups:
+
+| Group | Base path | Notes |
+|---|---|---|
+| Auth | `/api/auth` | Register (patient self-signup), login, `/me`, admin-only user creation for doctor/admin accounts |
+| Admin: doctor management | `/api/admin/doctors` | Create/update/delete doctors, mark/unmark leave days |
+| Public doctor search | `/api/doctors` | Search by specialisation, view availability — no auth |
+| Appointments (patient) | `/api/appointments` | Hold → confirm booking flow, list own appointments, cancel |
+| Doctor appointments | `/api/doctor/appointments` | Schedule, appointment detail, submit post-visit notes + prescriptions, regenerate AI summaries |
+| Google Calendar | `/api/doctor/calendar` | OAuth connect + callback |
+| Admin: appointments overview | `/api/admin/appointments` | Every appointment in the system |
+| Misc | `/health` | Health check |
+
+## Database schema
+
+Full detail (every model, field-by-field) is in [docs/db-schema.md](docs/db-schema.md). PostgreSQL via
+Prisma, organized around:
+
+- **Identity** — `User` (single table for all three roles), `DoctorProfile`, `LeaveDay`
+- **Booking** — `SlotHold` (5-min claim before a real booking exists), `Appointment` — double-booking is
+  prevented by a partial unique index on `(doctorId, slotStart)` scoped to active statuses, not a plain
+  Prisma `@@unique`, so a cancelled slot frees up immediately instead of staying permanently blocked
+- **Pre-visit** — `SymptomForm`, `PreVisitSummary` (AI-generated, with an `isFallback` flag)
+- **Post-visit** — `PostVisitNote`, `Prescription`, `MedicationReminder`, `PostVisitSummary`
+- **Notifications & Calendar** — `NotificationLog` (every outbound email logged before it's attempted),
+  `GoogleCalendarToken`, `CalendarEvent`
+
+## LLM integration
+
+Full detail (exact prompts, validation, fallback contract) is in
+[docs/llm-prompts.md](docs/llm-prompts.md). Azure OpenAI generates two summaries, both requesting strict
+JSON output and both wrapped so a failure (missing credentials, timeout, malformed response) **never**
+breaks the underlying booking/post-visit flow — it substitutes a clearly labeled (`isFallback: true`)
+default instead:
+
+- **Pre-visit summary** — generated right after a booking is confirmed, from the patient's reported
+  symptoms: urgency level, chief complaint, three suggested questions for the doctor.
+- **Post-visit summary** — generated after the doctor submits clinical notes: a patient-friendly summary,
+  medication schedule, and follow-up steps.
+
+Both prompts wrap the patient/doctor-supplied free text in delimiters with an explicit
+"treat as data, not instructions" boundary (prompt-injection mitigation) and cap input length so total
+prompt tokens stay around ~400 per call.
+
+## Google Calendar integration
+
+Full setup walkthrough (Google Cloud project, OAuth consent screen, credentials) is in
+[docs/google-calendar-setup.md](docs/google-calendar-setup.md). Only doctors connect via OAuth 2.0
+(`GET /api/doctor/calendar/connect`); the patient is added to the resulting Google Calendar event as an
+attendee by email, so they get an invite without a second OAuth flow. Like email, this is entirely
+best-effort — an unconfigured, revoked, or failing calendar connection never blocks or breaks booking,
+cancellation, or any other core flow; it's skipped and logged instead.
+
+## Email service
+
+Transactional email — account creation, booking confirmation, a separate new-booking notice to the
+doctor (including the AI pre-visit summary), post-visit summary, cancellation, leave notice, appointment
+reminders, and medication reminders — is sent via [Resend](https://resend.com)'s HTTP API
+(`backend/src/lib/mailer.js`), not SMTP.
+
+**Why HTTP API instead of SMTP:** Render's free Web Services have blocked all outbound traffic to SMTP
+ports (25, 465, 587) since September 2025, so an SMTP-based mailer cannot reach any provider once
+deployed there regardless of credentials. Resend's API runs over HTTPS, which isn't blocked.
+
+**How it's wired in:** every outbound email is first written to a `NotificationLog` row
+(`status: PENDING`) in the same request that triggers it, then a best-effort send is attempted
+immediately; a cron job separately sweeps `PENDING`/`FAILED` rows every 2 minutes with exponential
+backoff (up to 5 attempts). This means the app never blocks or fails a booking/registration/etc. on the
+email step — a failed or slow send is retried in the background, and the real error is recorded in
+`NotificationLog.lastError` for debugging. Configure via two env vars: `RESEND_API_KEY` and `EMAIL_FROM`
+— both optional; without them, sends simply fail and get logged/retried like any other transient failure,
+nothing crashes.
+
+**Limitation — no paid/verified sending domain:** this project does not use a purchased or
+DNS-verified custom domain for sending email. It sends from Resend's shared address,
+`onboarding@resend.dev`, which requires no domain setup but comes with a real restriction: Resend will
+only actually deliver mail to the email address the sending Resend account itself is registered under —
+every other recipient's send is rejected by Resend's API and logged as `status: FAILED` in
+`NotificationLog` (not silently dropped, but also not delivered). In practice this means the email
+feature is fully functional and testable end-to-end using an account whose email matches the Resend
+account's own address, but a real deployment serving arbitrary patients/doctors would need a verified
+custom domain (standard Resend "Domains → Add Domain" flow, adding SPF/DKIM/DMARC DNS records) to
+deliver to everyone — that step was intentionally left out of this submission's scope.
+
 ## Known scope limitations
 
 - No dedicated "reschedule" endpoint — reschedule is cancel-then-rebook, which correctly frees the old
@@ -113,3 +200,4 @@ dispatch (5 min), appointment reminder dispatch (15 min). No separate worker pro
   `docs/db-schema.md`.
 - The rate limiter on auth endpoints is in-memory, single-process — fine for this deployment target, not
   suitable as-is for a multi-instance/horizontally-scaled deployment.
+- No paid/verified email-sending domain — see **Email service** above for what this restricts.
