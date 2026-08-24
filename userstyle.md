@@ -91,13 +91,3 @@ as a secondary style, but the default/filled variant must be solid-background.
   above, outline style for secondary actions
 - Tables: hairline row dividers, no zebra-striping unless density requires it, left-align text columns,
   right-align numeric columns
-
-## What to avoid
-
-- Semi-transparent color washes behind same-color text (the specific anti-pattern called out above)
-- Drop shadows, glassmorphism, blur effects
-- Gradients of any kind
-- Rounded/pill-shaped buttons and cards with large radii (this is not the soft-UI aesthetic)
-- Multiple accent colors used decoratively on the same element (one accent per element, chosen for its
-  semantic meaning)
-- Muted/desaturated accent variants — keep colors flat and saturated per the palette above
