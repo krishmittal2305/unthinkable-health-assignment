@@ -85,8 +85,8 @@ seeding). Doctor and patient accounts aren't seeded — an admin creates doctors
 | Role    | Email                    | Password       | Notes |
 |---------|--------------------------|----------------|-------|
 | Admin   | `admin@clinic.test`      | `ChangeMe123!` | Created by `npm run prisma:seed` |
-| Doctor  | `parth@gmail.com`  | `password123`  | Example: Cardiology, Mon/Tue 09:00–17:00 UTC — create via the admin **Doctors** tab |
-| Patient | `adarsh@gmail.com`      | `adarsh123`  | Create via `/register` |
+| Doctor  | `dr.ashish@clinic.com`  | `password123`  | Example: Cardiology, Mon/Tue 09:00–17:00 UTC — create via the admin **Doctors** tab |
+| Patient | `daksh@fake.com`      | `daksh123`  | Create via `/register` |
 
 Log in at `/login`:
 
