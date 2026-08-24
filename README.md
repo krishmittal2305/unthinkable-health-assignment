@@ -4,6 +4,7 @@ A clinic appointment platform with separate portals for patients, doctors, and a
 double-booking prevention, AI-generated pre-visit and post-visit summaries (Azure OpenAI), email
 notifications, and Google Calendar sync.
 
+## Deployment Link: https://unthinkable-health-assignment-1.onrender.com/login
 ## Stack
 
 - **Backend:** Node.js, Express, JavaScript, Prisma ORM, PostgreSQL
